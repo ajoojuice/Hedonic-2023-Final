@@ -596,4 +596,4 @@ def preprocess_13(df): # "[P12]크롤링준비_시구단지명"를 m.land.naver.
     return crawl(df, "[P12]크롤링준비_시구단지명", "[P13]markerid")
 
 def preprocess_14(df):
-    df
+    print(df, "testing git")
