@@ -8,6 +8,8 @@ import re
 import time
 import threading
 from tqdm import tqdm
+from bs4 import BeautifulSoup
+from urllib.parse import quote
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -403,6 +405,69 @@ def crawl(df, source_col, new_col_name, max_workers=5):
     print(f"🟢 Finished crawling. {sum(v != 'UNMAPPED' for v in results.values())} / {len(results)} mapped.")
     return df
 
+# NORESULT / MULTIPLE 결과 분류해줌.
+def classify_search_result(url):
+    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    if "검색결과가 없습니다" in soup.text:
+        return "NORESULT"
+    return "MULTIPLE"
+
+def multiple_id_search(df, col_name):
+    # Ensure new column exists and is initially blank
+    df["[P14]multiple_results"] = None
+
+    # Insert the new column just to the right of [KEY]markerid
+    cols = df.columns.tolist()
+    marker_idx = cols.index("[KEY]markerid")
+    # Move [P14]multiple_results right after it
+    cols.remove("[P14]multiple_results")
+    cols.insert(marker_idx + 1, "[P14]multiple_results")
+    df = df[cols]  # Reorder columns
+
+    # Target only unmapped rows
+    target_rows = df[df["[KEY]markerid"] == "UNMAPPED"].copy()
+    print(f"🔍 Crawling markerIds for {len(target_rows)} unmapped entries...")
+
+    for idx, row in tqdm(target_rows.iterrows(), total=len(target_rows)):
+        term = row[col_name]
+        print(f"\n📌 Searching: {term}")
+        encoded_term = quote(term)
+        url = f"https://m.land.naver.com/search/result/{encoded_term}"
+        print(f"🔗 URL: {url}")
+
+        result = classify_search_result(url)
+        print(f"🧾 Result: {result}")
+
+        if result == "NORESULT":
+            df.at[idx, "[P14]multiple_results"] = "NORESULT"
+        else:
+            # MULTIPLE
+            response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            soup = BeautifulSoup(response.text, 'html.parser')
+            a_tags = soup.find_all('a', href=True)
+
+            marker_ids = []
+
+            for a in a_tags:
+                href = a['href']
+                if href.startswith("/complex/info/"):
+                    marker_id = href.split("/")[3]
+                    marker_ids.append(marker_id)
+
+            print(f"📌 Marker IDs: {marker_ids}")
+            df.at[idx, "[P14]multiple_results"] = marker_ids  # stored as list
+
+    return df  # return updated DataFrame
+
+
+
+
+
+
+
+
 # =================================================================================================
 '''[MOLIT] Preprocessing functions'''
 # 각 단계의 결과는 res file에 저장됨. 다음 단계에서는 이전 단계 결과 파일 불러와서 작동.
@@ -596,4 +661,27 @@ def preprocess_13(df): # "[P12]크롤링준비_시구단지명"를 m.land.naver.
     return crawl(df, "[P12]크롤링준비_시구단지명", "[P13]markerid")
 
 def preprocess_14(df):
-    print(df, "testing git")
+    return multiple_id_search(df, "[P12]크롤링준비_시구단지명")
+    
+    
+'''
+GS - 지에스
+2단지 - 2차
+앤 - &
+'''
+
+'''
+crawl 에서 처럼 똑같이 step_11 의 [P12]크롤링준비_시군구단지명 검색하기.
+
+여러 결과 나오는지? 결과가 없다고 나오는지 판단
+
+if 여러결과: then get markerid for each result
+    한 entry 당 each markerid retrieved를 markerid_2.csv 에 검색해서 각 sido, gungu, dong, complexName 불러오기. 
+    ok. 그러면 여기까지 정리하자면, 하나의 주소에 대해서 검색했더니 여러개가 나왔는데 이중 어떤것이 우리가 원하는 건지 정확히 안나온다는 뜻. 
+    그래서 여러 검색 결과의 markerid를 각각 markerid_2.csv 에서 검색해서 그 시군구동을 불러와서 step_11 와 일치하면 가져오기. 만약 여러개가 일치하면 SEVERAL 으로 표시하고
+    옆에 열에는 그 시군구까지 맞는 markerid 표기하기.
+
+
+if 결과없음: NORESULT라고 그 entry 에 표시하기.
+
+'''
