@@ -229,7 +229,7 @@ def mapping(source_file, source_column, target_file, target_column, call_column,
 
     return source_df
 
-
+def update_key(df):
     """
     [ROLE] Create or update [KEY]markerid column at index 0.
     Ensures most recent [P#]markerid columns are ordered by descending step (P10, P7, P5, etc.).
