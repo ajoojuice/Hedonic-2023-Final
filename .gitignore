@@ -3,3 +3,4 @@
 
 # Ignore data output folder (adjust if needed)
 res csv/
+*.xlsx
