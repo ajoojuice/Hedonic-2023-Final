@@ -97,6 +97,6 @@ if __name__ == "__main__":
     # res = preprocess_15(df)
     # store_result(res, 'markerid_3')
     '''Preprocessing 16'''
-    df = load_step(12)
-    res = preprocess_16(df)
-    store_result(res, 'step_13')
+    # df = load_step(12)
+    # res = preprocess_16(df)
+    # store_result(res, 'step_13')
