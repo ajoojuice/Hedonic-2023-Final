@@ -663,7 +663,11 @@ def preprocess_13(df): # "[P12]크롤링준비_시구단지명"를 m.land.naver.
 def preprocess_14(df):
     return multiple_id_search(df, "[P12]크롤링준비_시구단지명")
     
-    
+def preprocess_15(df):
+    df
+
+
+
 '''
 GS - 지에스
 2단지 - 2차
