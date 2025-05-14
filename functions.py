@@ -405,6 +405,96 @@ def crawl(df, source_col, new_col_name, max_workers=5):
     print(f"🟢 Finished crawling. {sum(v != 'UNMAPPED' for v in results.values())} / {len(results)} mapped.")
     return df
 
+def crawl_id(df,source_column_name, insert_data_after_which_col):
+    source = df[source_column_name].tolist()
+    
+    results = []
+
+    for marker_id in tqdm(source):
+        url = f'https://fin.land.naver.com/complexes/{marker_id}?tab=complex-info'
+        headers = {
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': 'https://fin.land.naver.com/',
+            'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+        }
+
+        try:
+            res = requests.get(url, headers=headers, timeout=10)
+            soup = BeautifulSoup(res.text, 'html.parser')
+
+            # Find the script tag containing the JSON data
+            script_tag = next((s.text for s in soup.find_all("script") if '"dehydratedState"' in s.text), None)
+            if not script_tag:
+                raise ValueError("JSON data not found in page")
+
+            # Extract and parse the JSON object
+            json_start = script_tag.find('{"props":')
+            json_end = script_tag.rfind('}') + 1
+            json_blob = script_tag[json_start:json_end]
+            parsed = json.loads(json_blob)
+            queries = parsed['props']['pageProps']['dehydratedState']['queries']
+
+            # Extract apartment details from JSON
+            data = {}
+            for q in queries:
+                result = q.get("state", {}).get("data", {}).get("result", {})
+                if "address" in result:
+                    address = result["address"].get("roadName")
+                    zip_code = result["address"].get("zipCode")
+                    approval_date = result.get("useApprovalDate")
+                    household_count = result.get("totalHouseholdNumber")
+                    heating_type = result.get("heatingAndCoolingInfo", {}).get("heatingEnergyType")
+                    parking = result.get("parkingInfo", {}).get("totalParkingCount")
+
+                    data = {
+                        "[P15]markerId": marker_id,
+                        "[P15]주소": address,
+                        "[P15]사용승인일": approval_date,
+                        "[P15]세대수": household_count,
+                        "[P15]난방": heating_type,
+                        "[P15]주차": parking,
+                        "[P15]우편번호": zip_code
+                    }
+                    break
+
+            if not data:
+                data = {"[P15]markerId": marker_id, "[P15]주소": None, "[P15]사용승인일": None, "[P15]세대수": None, "[P15]난방": None, "[P15]주차": None, "[P15]우편번호": None}
+
+            results.append(data)
+            print(data)
+
+        except Exception as e:
+            results.append({
+                "[P15]markerId": marker_id,
+                "[P15]주소": None,
+                "[P15]사용승인일": None,
+                "[P15]세대수": None,
+                "[P15]난방": None,
+                "[P15]주차": None,
+                "[P15]우편번호": None,
+                "[P15]Error": str(e)
+            })
+
+    # Convert to DataFrame and show
+    results_df = pd.DataFrame(results)
+    print(results_df)
+    
+    # Reset index to ensure proper merge
+    results_df.index = df.index  # ensures alignment with original df
+
+    # Determine insertion point
+    insert_index = df.columns.get_loc(insert_data_after_which_col) + 1
+
+    # Split df into parts and insert
+    df_front = df.iloc[:, :insert_index]
+    df_back = df.iloc[:, insert_index:]
+    df_combined = pd.concat([df_front, results_df, df_back], axis=1)
+
+    return df_combined
+
+    
+
+
 # NORESULT / MULTIPLE 결과 분류해줌.
 def classify_search_result(url):
     response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -664,7 +754,7 @@ def preprocess_14(df):
     return multiple_id_search(df, "[P12]크롤링준비_시구단지명")
     
 def preprocess_15(df):
-    df
+    return crawl_id(df, "complexNo", "[P6]시군구_단지명_cleaned_(주상복합)(도시형)")
 
 
 
