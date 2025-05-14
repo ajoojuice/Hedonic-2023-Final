@@ -5,6 +5,7 @@ import json
 import webbrowser
 import os
 import re
+import ast
 import time
 import threading
 from tqdm import tqdm
@@ -338,7 +339,6 @@ def update_key(df): # [MOLIT] step_5.csv에 1열 All_markerid 열 추가하기
 
     return df
 
-
 # Thread-local storage to keep one driver per thread
 thread_local = threading.local()
 
@@ -477,7 +477,8 @@ def crawl_id(df,source_column_name, insert_data_after_which_col):
 
     # Convert to DataFrame and show
     results_df = pd.DataFrame(results)
-    print(results_df)
+    print(f"[P15] results: first 20 lines")
+    print(results_df[:20])
     
     # Reset index to ensure proper merge
     results_df.index = df.index  # ensures alignment with original df
@@ -491,9 +492,6 @@ def crawl_id(df,source_column_name, insert_data_after_which_col):
     df_combined = pd.concat([df_front, results_df, df_back], axis=1)
 
     return df_combined
-
-    
-
 
 # NORESULT / MULTIPLE 결과 분류해줌.
 def classify_search_result(url):
@@ -551,12 +549,68 @@ def multiple_id_search(df, col_name):
 
     return df  # return updated DataFrame
 
+def match_marker_ids_by_region(df_step12, df_markerid):
+    """
+    Matches candidate markerIds in [P14]multiple_results to actual rows in markerid_3
+    based on **시, **구, **동.
+    Inserts new column [P16]match after [KEY]markerid.
+    """
 
+    match_results = []
 
+    for idx, row in df_step12.iterrows():
+        raw_candidates = row.get("[P14]multiple_results", "")
+        # Skip cases: empty, NORESULT, or "[]"
+        if pd.isna(raw_candidates) or raw_candidates.strip() in ["", "NORESULT", "[]"]:
+            match_results.append(None)
+            continue
+        try:
+            # Safely parse stringified list (e.g., "['1036', '12345']")
+            candidate_ids = ast.literal_eval(raw_candidates)
+            if not isinstance(candidate_ids, list):
+                match_results.append("NOTFOUND")
+                continue
+        except Exception:
+            match_results.append("NOTFOUND")
+            continue
 
+        # Row-level 시/구/동 to match against
+        target_sido = str(row.get("**시", "")).strip()
+        target_gungu = str(row.get("**구", "")).strip()
+        target_dong = str(row.get("**동", "")).strip()
+        print(f"source: {target_sido}, {target_gungu}, {target_dong}")
 
+        matched_ids = []
+        for marker_id in tqdm(candidate_ids):
+            df_markerid["complexNo"] = df_markerid["complexNo"].astype(str)
+            match_row = df_markerid[df_markerid["complexNo"] == marker_id]
+            if not match_row.empty:
+                sido = str(match_row.iloc[0]["sido"]).strip()
+                gungu = str(match_row.iloc[0]["gungu"]).strip()
+                dong = str(match_row.iloc[0]["dong"]).strip()
 
+                if (sido == target_sido) and (gungu == target_gungu) and (dong == target_dong):
+                    matched_ids.append(marker_id)
 
+        # Result logic
+        if not matched_ids:
+            match_results.append("NOTFOUND")
+        elif len(matched_ids) == 1:
+            match_results.append(matched_ids[0])
+        else:
+            match_results.append(matched_ids)
+
+    # Insert result column into original df_step12
+    result_series = pd.Series(match_results, name="[P16]match")
+    insert_index = df_step12.columns.get_loc("[KEY]markerid") + 1
+
+    df_with_match = pd.concat([
+        df_step12.iloc[:, :insert_index],
+        result_series,
+        df_step12.iloc[:, insert_index:]
+    ], axis=1)
+
+    return df_with_match
 
 # =================================================================================================
 '''[MOLIT] Preprocessing functions'''
@@ -750,11 +804,15 @@ def preprocess_13(df): # "[P12]크롤링준비_시구단지명"를 m.land.naver.
     '''
     return crawl(df, "[P12]크롤링준비_시구단지명", "[P13]markerid")
 
-def preprocess_14(df):
+def preprocess_14(df): # "[P12]크롤링준비_시군구단지명"을 검색했을때 여러값 나오는 markerid들 다 불러와서 기록하기.
     return multiple_id_search(df, "[P12]크롤링준비_시구단지명")
     
 def preprocess_15(df):
     return crawl_id(df, "complexNo", "[P6]시군구_단지명_cleaned_(주상복합)(도시형)")
+
+def preprocess_16(df):
+    markerid_3_df = load_csv('markerid_3')
+    return match_marker_ids_by_region(df,markerid_3_df)
 
 
 
