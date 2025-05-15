@@ -27,7 +27,8 @@ from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, pr
 from functions import classify_search_result, multiple_id_search
 
 if __name__ == "__main__":
-    
+    '''==========res csv folder만들기========'''
+    os.makedirs("res csv", exist_ok=True)
     '''==========DATA 불러오기==========''' #step_0.csv & markerid.csv
     
     '''[MOLIT] excel 파일 합쳐서 step_0.csv으로 저장하기'''
@@ -87,8 +88,8 @@ if __name__ == "__main__":
     # df12 = load_step(10)
     # res = preprocess_13(df12)
     # res = update_key(res)
-    # store_result(res, 'step_test')
-    '''[MOLIT Crwal Multiple] Preprocessing 14'''
+    # store_result(res, 'step_11')
+    '''[MOLIT Crawl Multiple] Preprocessing 14'''
     # df = load_step(11)
     # res = preprocess_14(df)
     # store_result(res, 'step_12')
