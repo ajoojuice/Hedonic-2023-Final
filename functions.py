@@ -874,7 +874,7 @@ def preprocess_17(df): # [MOLIT]의 [P16]match열이 하나의 값만 있으면 
 
     return df
 
-def preprocess_18(df_step14, df_markerid):
+def preprocess_18(df_step14, df_markerid): # unique도로명 & unique[P15]주소 map해서 complexNo 가져옴
     """
     Create a new column [P18]markerid in df_step14 by matching 도로명 (from df_step14)
     with [P15]주소 (from df_markerid), only if both sides are unique.
@@ -937,10 +937,10 @@ def preprocess_18(df_step14, df_markerid):
 
     # Step 6: Print summary
     total = len(df)
-    print(f"✅ Unique rows processed and matched: {unique_processed}")
-    print(f"❌ Duplicates skipped: {duplicates_skipped}")
-    print(f"🔍 Rows with no match found: {no_match}")
-    print(f"📊 Total rows: {total}")
+    print(f"✅ [P18]Unique rows processed and matched: {unique_processed}")
+    print(f"❌ [P18]Duplicates skipped: {duplicates_skipped}")
+    print(f"🔍 [P18]Rows with no match found: {no_match}")
+    print(f"📊 [P18]Total rows: {total}")
     
     df = update_markerid_from_P18(df)
     return df
