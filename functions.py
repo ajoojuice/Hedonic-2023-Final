@@ -807,14 +807,57 @@ def preprocess_13(df): # "[P12]크롤링준비_시구단지명"를 m.land.naver.
 def preprocess_14(df): # "[P12]크롤링준비_시군구단지명"을 검색했을때 여러값 나오는 markerid들 다 불러와서 기록하기.
     return multiple_id_search(df, "[P12]크롤링준비_시구단지명")
     
-def preprocess_15(df):
+def preprocess_15(df): # [markerid_3]의 complexNo를 네이버 크롤링해서 "[P6]..."열 뒤에 정보 삽입하기 (ex: [P15]주소, [P15]주차) 
     return crawl_id(df, "complexNo", "[P6]시군구_단지명_cleaned_(주상복합)(도시형)")
 
 def preprocess_16(df):
     markerid_3_df = load_csv('markerid_3')
     return match_marker_ids_by_region(df,markerid_3_df)
 
+def preprocess_17(df):
+    """
+    if df의 column "[P16]match" has only one value 
+        then: 그 value만 "[KEY]markerid" 열에 업데이트 하기.
+    For rows where [P16]match contains a single ID (not a list, not empty, not NOTFOUND),
+    update [KEY]markerid with that ID. Otherwise, leave as is.
+    Prints how many rows were updated and how many are still UNMAPPED.
+    """
+    updated_markerids = []
+    updated_count = 0
 
+    for idx, row in df.iterrows():
+        match_val = row.get("[P16]match")
+
+        if pd.isna(match_val) or match_val in ["", "NOTFOUND"]:
+            updated_markerids.append(row["[KEY]markerid"])
+            continue
+
+        if isinstance(match_val, str) and match_val.startswith("[") and match_val.endswith("]"):
+            updated_markerids.append(row["[KEY]markerid"])
+            continue
+        
+        updated_markerids.append(match_val)
+        updated_count += 1
+
+    # Apply updated markerids
+    df = df.copy()
+    df["[KEY]markerid"] = updated_markerids
+
+    # Count how many are still unmapped
+    still_unmapped = (df["[KEY]markerid"] == "UNMAPPED").sum()
+    total_rows = len(df)
+    mapped = total_rows-still_unmapped
+    print(f"✅[P17] Updated {updated_count} rows")
+    print(f"🔍 {mapped}/{total_rows} Done. Still unmapped: {still_unmapped} rows")
+
+    return df
+
+    
+    
+    
+    
+    
+    
 
 '''
 GS - 지에스

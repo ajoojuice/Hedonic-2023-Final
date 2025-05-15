@@ -23,7 +23,7 @@ from functions import get_sido_info, get_gungu_info, get_dong_info, get_apt_list
 from functions import combine_excel, preview
 from functions import load_step, load_csv, store_result
 from functions import unique_df, mapping, update_key
-from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16
+from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16, preprocess_17
 from functions import classify_search_result, multiple_id_search
 
 if __name__ == "__main__":
@@ -100,3 +100,7 @@ if __name__ == "__main__":
     # df = load_step(12)
     # res = preprocess_16(df)
     # store_result(res, 'step_13')
+    '''Preprocessing 17'''
+    # df = load_step(13)
+    # res = preprocess_17(df)
+    # store_result(res, 'step_14')
