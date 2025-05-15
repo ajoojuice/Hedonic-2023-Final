@@ -157,7 +157,6 @@ def load_csv(file_name):
     if not os.path.exists(path):
         raise FileNotFoundError(f"{file_name} result not found at {path}")
     return pd.read_csv(path)
-
 def store_result(df, file_name):
     path = f"res csv/{file_name}.csv"
     if not os.path.exists(path):
@@ -612,6 +611,29 @@ def match_marker_ids_by_region(df_step12, df_markerid):
 
     return df_with_match
 
+def check_address_uniqueness(df_step14, df_markerid):
+    """
+    Checks whether 도로명 in df_step14 and [P15]주소 in df_markerid are unique.
+    If not, prints the duplicated values with counts.
+    """
+
+    print("🔍 Checking uniqueness of 도로명 in step_14...")
+    if df_step14["도로명"].is_unique:
+        print("✅ '도로명' is unique in step_14.")
+    else:
+        print("❌ '도로명' is NOT unique. Duplicates:")
+        dup_road = df_step14["도로명"].value_counts()
+        print(dup_road[dup_road > 1].head(10))  # show top 10 duplicates
+
+    print("\n🔍 Checking uniqueness of [P15]주소 in markerid_3...")
+    if df_markerid["[P15]주소"].is_unique:
+        print("✅ '[P15]주소' is unique in markerid_3.")
+    else:
+        print("❌ '[P15]주소' is NOT unique. Duplicates:")
+        dup_addr = df_markerid["[P15]주소"].value_counts()
+        print(dup_addr[dup_addr > 1].head(10))  # show top 10 duplicates
+
+
 # =================================================================================================
 '''[MOLIT] Preprocessing functions'''
 # 각 단계의 결과는 res file에 저장됨. 다음 단계에서는 이전 단계 결과 파일 불러와서 작동.
@@ -810,11 +832,11 @@ def preprocess_14(df): # "[P12]크롤링준비_시군구단지명"을 검색했�
 def preprocess_15(df): # [markerid_3]의 complexNo를 네이버 크롤링해서 "[P6]..."열 뒤에 정보 삽입하기 (ex: [P15]주소, [P15]주차) 
     return crawl_id(df, "complexNo", "[P6]시군구_단지명_cleaned_(주상복합)(도시형)")
 
-def preprocess_16(df):
+def preprocess_16(df): # [MOLIT]의 [P14]multiple_results열의 값들에 대한 **시, **구, **동을 markerid_3의 sido, gungu, dong이랑 비교
     markerid_3_df = load_csv('markerid_3')
     return match_marker_ids_by_region(df,markerid_3_df)
 
-def preprocess_17(df):
+def preprocess_17(df): # [MOLIT]의 [P16]match열이 하나의 값만 있으면 update [KEY]markerid해줌.
     """
     if df의 column "[P16]match" has only one value 
         then: 그 value만 "[KEY]markerid" 열에 업데이트 하기.
@@ -852,12 +874,96 @@ def preprocess_17(df):
 
     return df
 
+def preprocess_18(df_step14, df_markerid):
+    """
+    Create a new column [P18]markerid in df_step14 by matching 도로명 (from df_step14)
+    with [P15]주소 (from df_markerid), only if both sides are unique.
+    Returns the updated df_step14 with the new column inserted after [KEY]markerid.
+    """
+    def update_markerid_from_P18(df):
+        df = df.copy()
+        total_rows = len(df)
+        
+        condition = (
+            (df["[KEY]markerid"] == "UNMAPPED") &
+            (df["[P18]markerid"].notna()) &
+            (df["[P18]markerid"] != "DUPLICATE")
+        )
+
+        df.loc[condition, "[KEY]markerid"] = df.loc[condition, "[P18]markerid"]
+        
+        total_mapped = (df["[KEY]markerid"] != "UNMAPPED").sum()
+        
+        print(f"✅ [KEY]markerid updated from [P18]markerid: {condition.sum()} rows")
+        print(f"📊 Total mapped: {total_mapped} / {total_rows}")
+        
+        return df
+
+    df = df_step14.copy()
+
+    # Step 1: Identify non-unique 도로명 in df_step14
+    duplicated_roadnames = set(df_step14["도로명"][df_step14["도로명"].duplicated(keep=False)])
+
+    # Step 2: Identify non-unique [P15]주소 in df_markerid
+    duplicated_addresses = df_markerid["[P15]주소"][df_markerid["[P15]주소"].duplicated(keep=False)]
+
+    # Step 3: Create a mapping from 주소 to complexNo (only for unique addresses)
+    unique_markerid = df_markerid[~df_markerid["[P15]주소"].isin(duplicated_addresses)]
+    address_to_id = dict(zip(unique_markerid["[P15]주소"], unique_markerid["complexNo"]))
+
+    # Step 4: Initialize the new column
+    new_col = []
+
+    unique_processed = 0
+    duplicates_skipped = 0
+    no_match = 0
+
+    for _, row in df.iterrows():
+        roadname = row["도로명"]
+
+        if roadname in duplicated_roadnames:
+            new_col.append("DUPLICATE")
+            duplicates_skipped += 1
+        elif roadname in address_to_id:
+            new_col.append(address_to_id[roadname])
+            unique_processed += 1
+        else:
+            new_col.append(None)
+            no_match += 1
+
+    # Step 5: Insert the new column after [KEY]markerid
+    insert_index = df.columns.get_loc("[KEY]markerid") + 1
+    df.insert(insert_index, "[P18]markerid", new_col)
+
+    # Step 6: Print summary
+    total = len(df)
+    print(f"✅ Unique rows processed and matched: {unique_processed}")
+    print(f"❌ Duplicates skipped: {duplicates_skipped}")
+    print(f"🔍 Rows with no match found: {no_match}")
+    print(f"📊 Total rows: {total}")
+    
+    df = update_markerid_from_P18(df)
+    return df
+
     
     
     
     
     
+    # 0. 새로운 열 만들기 = [P18]markerid: step_14 에대가 [KEY]markerid 다음에 추가할거임. 
+    # 1. not unique 한 애들 찾고 제외하기. 새로운 열에 DUPLICATE이라고 기입
+    # 2. unique한 애들로만 가지고 놀거임.
+    # 3. row by row 내려가면서: if 도로명 is unique, then search in markerid_3의 [P15]주소에 match 해서 결과로 complexNo가져와서 새로운 열게 기입. 
     
+
+
+
+
+# match_marker_ids_by_region와 비슷하지만, [MOLIT]의 col"도로명"과 markerid_3의 col"[P15]주소"과 match함
+    # if: df의 col[P16]match의 값이 list 인 경우 (우리가 위에서는 single인 경우만 했음! 이번에너느 제외했었던 multiple value상황 처리할거임.)
+    # then: 하나씩 markerid_3 에서 검색해서 col[P15]주소를 불러올거임. 
+    # 불러온 여러개의 [P15]주소들 중에서 우리 리스트가 있는 row의 col"도로명"의 값이랑 일치하는 id만 반환할거임. 
+    # 반환한 single value는 새로운 열로 추가.(열 이름은 [P18]markerid)(열 위치는 [KEY]markerid열 바로 뒤에.)
 
 '''
 GS - 지에스
