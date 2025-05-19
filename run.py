@@ -113,11 +113,12 @@ if __name__ == "__main__":
     '''Preprocessing 19'''
     df = load_step(15)
     count_unmapped(df)
+    
     unmapped_df = df[df.iloc[:, 0] == "UNMAPPED"].copy()
-    store_result(unmapped_df, "edge_case")
-    df_edge = load_csv('edge_case')
+    store_result(unmapped_df, "edge_0")
+    df_edge0 = load_csv('edge_0')
     df_markerid3 = load_csv('markerid_3')
     
-    df_edge_case2 = preprocess_19(df_edge, df_markerid3)
-    df_edge_case2 = update_key_new(df_edge_case2)
-    store_result(df_edge_case2, 'edge_case2')
+    df_edge_1 = preprocess_19(df_edge0, df_markerid3)
+    df_edge_1 = update_key_new(df_edge_1)
+    store_result(df_edge_1, 'edge_1')
