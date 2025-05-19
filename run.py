@@ -21,9 +21,9 @@ from config import TARGET_SIDO_CODES, BASE_GUNGU_URL, BASE_DONG_URL, BASE_APT_UR
 
 from functions import get_sido_info, get_gungu_info, get_dong_info, get_apt_list, make_df
 from functions import combine_excel, preview
-from functions import load_step, load_csv, store_result
-from functions import unique_df, mapping, update_key
-from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16, preprocess_17, preprocess_18
+from functions import load_step, load_csv, store_result, count_unmapped
+from functions import unique_df, mapping, update_key, update_key_new
+from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16, preprocess_17, preprocess_18, preprocess_19
 from functions import classify_search_result, multiple_id_search
 
 if __name__ == "__main__":
@@ -110,8 +110,14 @@ if __name__ == "__main__":
     # df_markerid_3 = load_csv('markerid_3')
     # res = preprocess_18(df_step_14, df_markerid_3)
     # store_result(res, 'step_15')
+    '''Preprocessing 19'''
+    df = load_step(15)
+    count_unmapped(df)
+    unmapped_df = df[df.iloc[:, 0] == "UNMAPPED"].copy()
+    store_result(unmapped_df, "edge_case")
+    df_edge = load_csv('edge_case')
+    df_markerid3 = load_csv('markerid_3')
     
-    
-    
-    # df = load_step(14)
-    # preview(df)
+    df_edge_case2 = preprocess_19(df_edge, df_markerid3)
+    df_edge_case2 = update_key_new(df_edge_case2)
+    store_result(df_edge_case2, 'edge_case2')

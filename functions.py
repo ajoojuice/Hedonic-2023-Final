@@ -338,6 +338,26 @@ def update_key(df): # [MOLIT] step_5.csv에 1열 All_markerid 열 추가하기
 
     return df
 
+def count_unmapped(df):
+    unmapped_count = (df.iloc[:, 0] == "UNMAPPED").sum()
+    print(f"🔍 UNMAPPED count: {unmapped_count}")
+
+def update_key_new(df):
+    df = df.copy()
+    second_col = df.columns[1]
+
+    condition = (
+        df[second_col].apply(lambda x: str(x).isdigit()) &
+        (df["[KEY]markerid"] == "UNMAPPED")
+    )
+
+    update_count = condition.sum()
+    df.loc[condition, "[KEY]markerid"] = df.loc[condition, second_col]
+
+    print(f"✅ Updated {update_count} rows from {second_col} to [KEY]markerid.")
+    return df
+
+
 # Thread-local storage to keep one driver per thread
 thread_local = threading.local()
 
@@ -955,8 +975,80 @@ def preprocess_18(df_step14, df_markerid): # unique도로명 & unique[P15]주소
     # 2. unique한 애들로만 가지고 놀거임.
     # 3. row by row 내려가면서: if 도로명 is unique, then search in markerid_3의 [P15]주소에 match 해서 결과로 complexNo가져와서 새로운 열게 기입. 
     
+def preprocess_19(df_edge_case, df_markerid3): # [EDGE_CASE]
+    """
+    df_edge_case의 "도로명" column 에서 Duplicate 값들 제외. Unique value들에 대해서만 각자 df_markerid3에 검색해서, complexNo 가져옴. 
+        df_markerid3의 "[P15]주소" columnd애 검색하면 됨. 
+        df_edge_case의 "도로명"의 uniqueness검사할때는, "도로명" column안에서만 검색하는것. 
+        
+        unique한 애들을 markerid3에 검색하고 그 결과도 unique 한 경우, complexNo 가져와서 기입하기. 
+            기입 위치는 df_edge_case의 첫번째열인 [KEY]markerid 의 옆인 새로운 열 추가하기
+                새로운 열의 이름은 [P19]markerid
+    """
+    """
+    Match unique 도로명 in df_edge_case to unique [P15]주소 in df_markerid3.
+    - If 도로명 is duplicated in df_edge_case: label as 'DUPL:edge'
+    - If result is duplicated in df_markerid3: label as 'DUPL:markerid3'
+    - If no match found: label as 'FAILED2MAP'
+    - If unique match found: assign the complexNo
+    Returns df_edge_case with new column [P19]markerid inserted after [KEY]markerid.
+    """
 
+    df = df_edge_case.copy()
 
+    # Step 1: Identify duplicates
+    duplicated_in_edge = set(df["도로명"][df["도로명"].duplicated(keep=False)])
+    duplicated_in_markerid3 = set(
+        df_markerid3["[P15]주소"][df_markerid3["[P15]주소"].duplicated(keep=False)]
+    )
+
+    # Step 2: Build mapping from [P15]주소 → complexNo (only keep unique ones)
+    unique_markerid3 = df_markerid3[~df_markerid3["[P15]주소"].isin(duplicated_in_markerid3)]
+    address_to_complexNo = dict(zip(unique_markerid3["[P15]주소"], unique_markerid3["complexNo"]))
+
+    # Step 3: Apply logic row-by-row
+    results = []
+    count_map = {
+        "mapped": 0,
+        "DUPL:edge": 0,
+        "DUPL:markerid3": 0,
+        "FAILED2MAP": 0
+    }
+
+    for _, row in df.iterrows():
+        roadname = row["도로명"]
+
+        if roadname in duplicated_in_edge:
+            results.append("DUPL:edge")
+            count_map["DUPL:edge"] += 1
+        elif roadname in duplicated_in_markerid3:
+            results.append("DUPL:markerid3")
+            count_map["DUPL:markerid3"] += 1
+        elif roadname in address_to_complexNo:
+            results.append(address_to_complexNo[roadname])
+            count_map["mapped"] += 1
+        else:
+            results.append("FAILED2MAP")
+            count_map["FAILED2MAP"] += 1
+
+    # Step 4: Insert [P19]markerid after [KEY]markerid
+    insert_index = df.columns.get_loc("[KEY]markerid") + 1
+    df.insert(insert_index, "[P19]markerid", results)
+
+    # Step 5: Summary
+    total = len(df)
+    print("✅ Summary:")
+    print(f"  • Mapped:         {count_map['mapped']}")
+    print(f"  • DUPL:edge:      {count_map['DUPL:edge']}")
+    print(f"  • DUPL:markerid3: {count_map['DUPL:markerid3']}")
+    print(f"  • FAILED2MAP:     {count_map['FAILED2MAP']}")
+    print(f"  • Total:          {total}")
+
+    return df
+    
+def preprocess_20(df):
+    df
+    
 
 
 # match_marker_ids_by_region와 비슷하지만, [MOLIT]의 col"도로명"과 markerid_3의 col"[P15]주소"과 match함
