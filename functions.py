@@ -975,7 +975,7 @@ def preprocess_18(df_step14, df_markerid): # unique도로명 & unique[P15]주소
     # 2. unique한 애들로만 가지고 놀거임.
     # 3. row by row 내려가면서: if 도로명 is unique, then search in markerid_3의 [P15]주소에 match 해서 결과로 complexNo가져와서 새로운 열게 기입. 
     
-def preprocess_19(df_edge_case, df_markerid3): # [EDGE_CASE]
+def preprocess_19(df_edge_case, df_markerid3): # [EDGE_CASE]중에서 unique"도로명"& unique markerid_3  
     """
     df_edge_case의 "도로명" column 에서 Duplicate 값들 제외. Unique value들에 대해서만 각자 df_markerid3에 검색해서, complexNo 가져옴. 
         df_markerid3의 "[P15]주소" columnd애 검색하면 됨. 
