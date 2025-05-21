@@ -26,7 +26,7 @@ pd.set_option('display.width', 1000)              # set max line width
 pd.set_option('display.max_colwidth', None)       # don't truncate cell values
 pd.set_option('display.unicode.east_asian_width', True)  # better for Korean spacing
 
-from config import EXCEL_FILES, COMBINED_EXCEL_OUTPUT, COMBINED_CSV_OUTPUT
+from config import EXCEL_FILES, COMBINED_EXCEL_OUTPUT, COMBINED_CSV_OUTPUT, ROK_STAT_EXCEL_FILE
 from config import TARGET_SIDO_CODES, BASE_GUNGU_URL, BASE_DONG_URL, BASE_APT_URL, BASE_HEADERS, BASE_SIDO_URL
 
 '''[NAVER] 네이버 부동산에서 모든 markerid 가져오기'''
@@ -1102,6 +1102,57 @@ def preprocess_21(edge_df, step_df): # 수동검색 이후 edge_manual.csv 을 s
 
     return step_df
 
+def preprocess_22(): # 통계청 자료 첫 열 3개로 나눠서 기입 + csv로 저장 + minor cleanup
+    df = pd.read_excel(ROK_STAT_EXCEL_FILE)
+    store_result(df, 'KOSTAT_0')
+    
+    """
+    Based on indentation in the first column, reconstruct 3-level structure.
+    Output columns: '[P22]시도', '[P22]군구', '[P22]읍면동'
+    """
+    col = df.columns[0]
+    values = df[col].tolist()
+
+    level_1 = None
+    level_2 = None
+    parsed_rows = []
+
+    for i, val in enumerate(values):
+        clean_val = val.strip()
+        indent = len(val) - len(clean_val)
+
+        if indent == 0:
+            level_1 = clean_val
+            level_2 = None
+            level_3 = None
+        elif indent == 3:
+            level_2 = clean_val
+            level_3 = None
+        elif indent == 6:
+            level_3 = clean_val
+        else:
+            print(f"⚠️ Unexpected indent on row {i}: [{val}] → indent={indent}")
+            level_1 = clean_val
+            level_2 = None
+            level_3 = None
+
+        parsed_rows.append([level_1, level_2, level_3])
+
+    # Build final DataFrame
+    parsed_df = pd.DataFrame(parsed_rows, columns=["[P22]시도", "[P22]군구", "[P22]읍면동"])
+    full_df = pd.concat([parsed_df, df.iloc[:, 1:].reset_index(drop=True)], axis=1)
+
+    '''change 광역시--> 시 in the first col'''
+    df = full_df.copy()
+    first_col = df.columns[0]
+    df[first_col] = df[first_col].str.replace("광역시", "시", regex=False)
+    print(f"✅ Replaced '광역시' with '시' in column: {first_col}")
+    
+    '''Delete all rows that don't have level 3 values'''
+    df = df.copy()
+    filtered_df = df[df["[P22]읍면동"].notna()]
+    print(f"✅ Filtered: {len(filtered_df)} rows kept out of {len(df)} total.")
+    return filtered_df
 
 
 

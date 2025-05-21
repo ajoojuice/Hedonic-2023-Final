@@ -18,12 +18,13 @@ pd.set_option('display.unicode.east_asian_width', True)  # better for Korean spa
 
 from config import EXCEL_FILES, COMBINED_EXCEL_OUTPUT, COMBINED_CSV_OUTPUT
 from config import TARGET_SIDO_CODES, BASE_GUNGU_URL, BASE_DONG_URL, BASE_APT_URL, BASE_HEADERS, BASE_SIDO_URL
+from config import ROK_STAT_EXCEL_FILE
 
 from functions import get_sido_info, get_gungu_info, get_dong_info, get_apt_list, make_df
 from functions import combine_excel, preview
 from functions import load_step, load_csv, store_result, count_unmapped
 from functions import unique_df, mapping, update_key, update_key_new
-from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16, preprocess_17, preprocess_18, preprocess_19, preprocess_20, preprocess_21
+from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16, preprocess_17, preprocess_18, preprocess_19, preprocess_20, preprocess_21, preprocess_22
 from functions import classify_search_result, multiple_id_search
 
 if __name__ == "__main__":
@@ -149,13 +150,24 @@ if __name__ == "__main__":
     # res = preprocess_21(edge_manual_df, step_15_df)
     # store_result(res, 'step_16')
 
+    '''Preprocessing 22'''
+    # res = preprocess_22()
+    # store_result(res, 'KOSTAT_1')
+    
+    
     '''Preprocessing'''
-    # 통계청 자료 첫 열 3개로 나눠서 기입 + csv로 저장
-    # KOR_stat.csv
+    # markerid_3의 시군구로 통게청에 매핑해서 데이터 열들 추가하기. 
+    # markerid_4으로 저장.
     
     
     
     
+    
+    
+    
+    
+    '''Preprocessing'''
+
     
     
     
