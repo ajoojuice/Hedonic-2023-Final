@@ -1256,33 +1256,46 @@ def preprocess_25(markerid_df, KOSTAT_df): # markerid_5의 'sido'/'gungu'/'[P24K
 
     return merged_df
 
+def preprocess_26(step_df, markerid_df):
+    """
+    For each row in step_df, find matching row in markerid_df by [KEY]markerid.
+    Append columns from column 12 onward from markerid_df to step_df.
+    Rename the appended columns to start with [P25] instead of [Pxx].
+    """
+    step_df = step_df.copy()
+    markerid_df = markerid_df.copy()
+
+    # Start from column index 12 (i.e., column number 13)
+    info_cols = markerid_df.columns[12:]
+
+    # Subset and rename columns
+    info_subset = markerid_df[["complexNo"] + list(info_cols)].copy()
+    
+    rename_map = {
+    col: re.sub(r"\[P[^\]]+\]", "[P26]", col) if "[" in col else col
+    for col in info_cols
+    }
+    info_subset.rename(columns=rename_map, inplace=True)
+
+    # Force both merge keys to string type
+    step_df["[KEY]markerid"] = step_df["[KEY]markerid"].astype(str)
+    info_subset["complexNo"] = info_subset["complexNo"].astype(str)
+
+    # Merge on [KEY]markerid = complexNo
+    merged = step_df.merge(
+        info_subset,
+        how="left",
+        left_on="[KEY]markerid",
+        right_on="complexNo"
+    )
+
+    # Drop redundant merge key
+    merged.drop(columns=["complexNo"], inplace=True)
+
+    return merged
 
 
 
-# match_marker_ids_by_region와 비슷하지만, [MOLIT]의 col"도로명"과 markerid_3의 col"[P15]주소"과 match함
-    # if: df의 col[P16]match의 값이 list 인 경우 (우리가 위에서는 single인 경우만 했음! 이번에너느 제외했었던 multiple value상황 처리할거임.)
-    # then: 하나씩 markerid_3 에서 검색해서 col[P15]주소를 불러올거임. 
-    # 불러온 여러개의 [P15]주소들 중에서 우리 리스트가 있는 row의 col"도로명"의 값이랑 일치하는 id만 반환할거임. 
-    # 반환한 single value는 새로운 열로 추가.(열 이름은 [P18]markerid)(열 위치는 [KEY]markerid열 바로 뒤에.)
-
-'''
-GS - 지에스
-2단지 - 2차
-앤 - &
-'''
-
-'''
-crawl 에서 처럼 똑같이 step_11 의 [P12]크롤링준비_시군구단지명 검색하기.
-
-여러 결과 나오는지? 결과가 없다고 나오는지 판단
-
-if 여러결과: then get markerid for each result
-    한 entry 당 each markerid retrieved를 markerid_2.csv 에 검색해서 각 sido, gungu, dong, complexName 불러오기. 
-    ok. 그러면 여기까지 정리하자면, 하나의 주소에 대해서 검색했더니 여러개가 나왔는데 이중 어떤것이 우리가 원하는 건지 정확히 안나온다는 뜻. 
-    그래서 여러 검색 결과의 markerid를 각각 markerid_2.csv 에서 검색해서 그 시군구동을 불러와서 step_11 와 일치하면 가져오기. 만약 여러개가 일치하면 SEVERAL 으로 표시하고
-    옆에 열에는 그 시군구까지 맞는 markerid 표기하기.
 
 
-if 결과없음: NORESULT라고 그 entry 에 표시하기.
 
-'''
