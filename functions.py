@@ -1046,9 +1046,69 @@ def preprocess_19(df_edge_case, df_markerid3): # [EDGE_CASE]중에서 unique"도
 
     return df
     
-def preprocess_20(df):
-    df
+def preprocess_20(df): # Manual 검색에 필요한 열들을 2,3열로 옮김. 검생의 편리성을 위함. edge case 300개 정도 수동작업 필요.
+    '''
+    find the column "도로명"
+    find the column "[P12]크롤링준비_시구단지명"
     
+    move both of these columns to the second and third columns respectively. 
+    do not overwrite the original 2 and 3 columns
+    '''
+    
+    """
+    Move '도로명' and '[P12]크롤링준비_시구단지명' columns to the second and third positions,
+    without overwriting existing columns.
+    """
+
+    df = df.copy()
+
+    # Identify columns to move
+    col1 = "도로명"
+    col2 = "[P12]크롤링준비_시구단지명"
+
+    # Remove them temporarily
+    cols_to_move = df[[col1, col2]]
+    df = df.drop([col1, col2], axis=1)
+
+    # Re-insert them at positions 1 and 2
+    df.insert(1, col2, cols_to_move[col2])
+    df.insert(1, col1, cols_to_move[col1])
+
+    return df
+
+def preprocess_21(edge_df, step_df): # 수동검색 이후 edge_manual.csv 을 step_15.csv에 매핑해서 step_16 만들기.
+    """
+    For each row in step_df, if its [P12]크롤링준비_시구단지명 exists in edge_df,
+    update the [KEY]markerid with the value from edge_df.
+    """
+
+    step_df = step_df.copy()
+
+    # Create mapping from edge_manual
+    mapping = dict(zip(
+        edge_df["[P12]크롤링준비_시구단지명"],
+        edge_df["[KEY]markerid"]
+    ))
+
+    # Condition: if value exists in mapping
+    updated_count = 0
+    for idx, row in step_df.iterrows():
+        key = row["[P12]크롤링준비_시구단지명"]
+        if key in mapping:
+            step_df.at[idx, "[KEY]markerid"] = mapping[key]
+            updated_count += 1
+
+    print(f"✅ Updated {updated_count} rows in step_15 using edge_manual.")
+
+    return step_df
+
+
+
+
+
+
+
+
 
 
 # match_marker_ids_by_region와 비슷하지만, [MOLIT]의 col"도로명"과 markerid_3의 col"[P15]주소"과 match함

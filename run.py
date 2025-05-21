@@ -23,12 +23,12 @@ from functions import get_sido_info, get_gungu_info, get_dong_info, get_apt_list
 from functions import combine_excel, preview
 from functions import load_step, load_csv, store_result, count_unmapped
 from functions import unique_df, mapping, update_key, update_key_new
-from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16, preprocess_17, preprocess_18, preprocess_19
+from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16, preprocess_17, preprocess_18, preprocess_19, preprocess_20, preprocess_21
 from functions import classify_search_result, multiple_id_search
 
 if __name__ == "__main__":
     '''==========res csv folder만들기========'''
-    os.makedirs("res csv", exist_ok=True)
+    # os.makedirs("res csv", exist_ok=True)
     '''==========DATA 불러오기==========''' #step_0.csv & markerid.csv
     
     '''[MOLIT] excel 파일 합쳐서 step_0.csv으로 저장하기'''
@@ -122,4 +122,54 @@ if __name__ == "__main__":
     # df_edge_1 = preprocess_19(df_edge0, df_markerid3)
     # df_edge_1 = update_key_new(df_edge_1)
     # store_result(df_edge_1, 'edge_1')
+    '''Preprocessing 20'''
+    # df = load_csv('edge_1')
+    # res = preprocess_20(df)
+    # store_result(res, 'edge_manual')
     
+    '''================================================================================='''
+    '''Manual 검색에 필요한 열들을 2,3열로 옮김. 검색의 편리성을 위함. edge case ~300개 수동작업 필요'''
+    '''================================================================================='''
+    # 수동 검색 방법/tip (우편번호 이용하기)
+    # 도로명 주소 검색: https://www.juso.go.kr/openIndexPage.do
+        # 사이트에 edge_manual.csv 의 두번째 열 '도로명' 검색
+        # 우편번호 기억하기
+    # 모바일 네이버 부동산 사이트 https://m.land.naver.com/search
+        # 사이트에 edge_manual.csv의 3번째 열 '[P12]크롤링준비_시구단지명' 검색
+        # 우편번호 맞춰보기. 
+    # 사용자의 discretion에 따라 우편번호간의 +/- 로 markerid 판단하고 기입하기.
+        # 수동작업으로도 찾지 못한 경우(빌라들 다수) 'UNMAPPED'으로 기입하기.
+    '''================================================================================='''
+    # 이하 edge_manual.csv에 업데이트 되었다는 전제로 진행.
+
+    '''Preprocessing 21'''
+    # edge_manual_df = load_csv('edge_manual')
+    # step_15_df = load_step(15)
+
+    # res = preprocess_21(edge_manual_df, step_15_df)
+    # store_result(res, 'step_16')
+
+    '''Preprocessing'''
+    # 통계청 자료 첫 열 3개로 나눠서 기입 + csv로 저장
+    # KOR_stat.csv
+    
+    
+    
+    
+    
+    
+    
+    
+    '''Preprocessing'''
+    # markerid_3의 시군구로 통게청에 매핑해서 데이터 열들 추가하기. 
+    # markerid_4으로 저장.
+    '''Preprocessing'''
+    # step_16을 [KEY]markerid으로 markerid_3.csv에 매핑해서 자료 데이터 가져오기.
+    '''Preprocessing'''
+    # step_16(5000개의 데이터) --> step_2.csv의 (70,000) 데이터로 다시 뿌리기. 
+    # 결과 step_17.csv '[P2]시군구_단지명'을 기준으로 하기. 
+    # step_16의 불필요한 열들도 다 step_2에 추가하기. 
+    # step_17으로 저장. 
+    '''Preprocessing'''
+    # step_18.csv 는 클린 final version 만들기.
+        
