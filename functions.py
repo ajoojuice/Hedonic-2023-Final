@@ -1154,7 +1154,22 @@ def preprocess_22(): # 통계청 자료 첫 열 3개로 나눠서 기입 + csv�
     print(f"✅ Filtered: {len(filtered_df)} rows kept out of {len(df)} total.")
     return filtered_df
 
+def preprocess_23(df): # markerid_3.csv에 새로운 주소 인덱스 만들기 '[P23]주소'
+    df = df.copy()
 
+    # Create the new address column by concatenating
+    df["[P23]주소"] = df["sido"].astype(str) + " " + df["gungu"].astype(str) + " " + df["[P15]주소"].astype(str)
+
+    # Find where to insert it (after 'complexName')
+    insert_index = df.columns.get_loc("complexName") + 1
+
+    # Reorder columns to insert the new one
+    cols = list(df.columns)
+    cols.insert(insert_index, cols.pop(cols.index("[P23]주소")))
+    df = df[cols]
+
+    print("✅ Added column [P23]주소 after complexName.")
+    return df
 
 
 

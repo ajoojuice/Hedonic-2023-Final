@@ -24,7 +24,7 @@ from functions import get_sido_info, get_gungu_info, get_dong_info, get_apt_list
 from functions import combine_excel, preview
 from functions import load_step, load_csv, store_result, count_unmapped
 from functions import unique_df, mapping, update_key, update_key_new
-from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16, preprocess_17, preprocess_18, preprocess_19, preprocess_20, preprocess_21, preprocess_22
+from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16, preprocess_17, preprocess_18, preprocess_19, preprocess_20, preprocess_21, preprocess_22, preprocess_23
 from functions import classify_search_result, multiple_id_search
 
 if __name__ == "__main__":
@@ -153,28 +153,20 @@ if __name__ == "__main__":
     '''Preprocessing 22'''
     # res = preprocess_22()
     # store_result(res, 'KOSTAT_1')
+    '''Preprocessing 23'''
+    # df = load_csv('markerid_3')
+    # res = preprocess_23(df)
+    # store_result(res, 'markerid_4')
     
     
-    '''Preprocessing'''
-    # markerid_3의 시군구로 통게청에 매핑해서 데이터 열들 추가하기. 
+    
+    
+    
+    '''Preprocessing_24'''
+    # markerid_3의 '시군구'로 통게청에 매핑해서 데이터 열들 추가하기. 
     # markerid_4으로 저장.
     
     
-    
-    
-    
-    
-    
-    
-    '''Preprocessing'''
-
-    
-    
-    
-    
-    '''Preprocessing'''
-    # markerid_3의 시군구로 통게청에 매핑해서 데이터 열들 추가하기. 
-    # markerid_4으로 저장.
     '''Preprocessing'''
     # step_16을 [KEY]markerid으로 markerid_3.csv에 매핑해서 자료 데이터 가져오기.
     '''Preprocessing'''
