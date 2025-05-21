@@ -19,12 +19,13 @@ pd.set_option('display.unicode.east_asian_width', True)  # better for Korean spa
 from config import EXCEL_FILES, COMBINED_EXCEL_OUTPUT, COMBINED_CSV_OUTPUT
 from config import TARGET_SIDO_CODES, BASE_GUNGU_URL, BASE_DONG_URL, BASE_APT_URL, BASE_HEADERS, BASE_SIDO_URL
 from config import ROK_STAT_EXCEL_FILE
+from config import KAKAO_API_KEY
 
 from functions import get_sido_info, get_gungu_info, get_dong_info, get_apt_list, make_df
 from functions import combine_excel, preview
 from functions import load_step, load_csv, store_result, count_unmapped
 from functions import unique_df, mapping, update_key, update_key_new
-from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16, preprocess_17, preprocess_18, preprocess_19, preprocess_20, preprocess_21, preprocess_22, preprocess_23
+from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16, preprocess_17, preprocess_18, preprocess_19, preprocess_20, preprocess_21, preprocess_22, preprocess_23, preprocess_24, preprocess_25
 from functions import classify_search_result, multiple_id_search
 
 if __name__ == "__main__":
@@ -158,17 +159,38 @@ if __name__ == "__main__":
     # res = preprocess_23(df)
     # store_result(res, 'markerid_4')
     
-    
-    
-    
-    
     '''Preprocessing_24'''
-    # markerid_3의 '시군구'로 통게청에 매핑해서 데이터 열들 추가하기. 
-    # markerid_4으로 저장.
+    # markerid_4_df = load_csv('markerid_4')
+    # res = preprocess_24(markerid_4_df, KAKAO_API_KEY)
+    # store_result(res, 'markerid_5')
+    
+    '''Preprocessing_25'''
+    # markerid_5_df = load_csv('markerid_5')
+    # KOSTAT_1_df = load_csv('KOSTAT_1')
+    
+    # res = preprocess_25(markerid_5_df,KOSTAT_1_df)
+    # store_result(res, 'markerid_6')
     
     
-    '''Preprocessing'''
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    # markerid_4의 행정동으로 KOSTAT_1의 통계자료를 markerid_4에 열로 추가하기
+    
+    # markerid_4의 새로운 인구통계를 step_16이랑 markerid이용해서 step_16에 추가하기.  
+    
+    
+    
     # step_16을 [KEY]markerid으로 markerid_3.csv에 매핑해서 자료 데이터 가져오기.
+    
+    
+    
     '''Preprocessing'''
     # step_16(5000개의 데이터) --> step_2.csv의 (70,000) 데이터로 다시 뿌리기. 
     # 결과 step_17.csv '[P2]시군구_단지명'을 기준으로 하기. 

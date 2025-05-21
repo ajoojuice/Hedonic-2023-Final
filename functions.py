@@ -1171,8 +1171,90 @@ def preprocess_23(df): # markerid_3.csv에 새로운 주소 인덱스 만들기 
     print("✅ Added column [P23]주소 after complexName.")
     return df
 
+def preprocess_24(df, api_key): # markerid_4의 '[P23]주소'를 kakao api로 검색해서 행정동 외 data 받아와서 markerid_5으로 저장
+    """
+    Uses Kakao Geocoding API to extract full address and coordinate info
+    for each row using the '[P23]주소' column in the DataFrame.
+    Appends each extracted value to the DataFrame with prefix '[P24K]'.
+    """
+    df = df.copy()
+    
+    # Columns we want to extract from the API
+    fields_to_extract = [
+        "address_name", "address_type", "x", "y",
+        "address.address_name", "address.region_1depth_name",
+        "address.region_2depth_name", "address.region_3depth_name",
+        "address.region_3depth_h_name", "address.h_code", "address.b_code",
+        "address.mountain_yn", "address.main_address_no", "address.sub_address_no"
+    ]
 
+    # Prepare a container for results
+    result_data = {f"[P24K]{field}": [] for field in fields_to_extract}
 
+    for address in tqdm(df["[P23]주소"]):
+        url = "https://dapi.kakao.com/v2/local/search/address.json"
+        headers = {"Authorization": f"KakaoAK {api_key}"}
+        params = {"query": address}
+
+        try:
+            res = requests.get(url, headers=headers, params=params, timeout=5)
+            data = res.json()
+
+            if "documents" in data and len(data["documents"]) > 0:
+                doc = data["documents"][0]
+                for field in fields_to_extract:
+                    # Handle nested fields like address.x, address.region_1depth_name
+                    keys = field.split(".")
+                    value = doc
+                    for k in keys:
+                        value = value.get(k, None) if isinstance(value, dict) else None
+                    result_data[f"[P24K]{field}"].append(value)
+            else:
+                for field in fields_to_extract:
+                    result_data[f"[P24K]{field}"].append(None)
+
+        except Exception as e:
+            for field in fields_to_extract:
+                result_data[f"[P24K]{field}"].append(None)
+
+    # Convert the result dictionary into a DataFrame and concatenate
+    result_df = pd.DataFrame(result_data)
+    final_df = pd.concat([df.reset_index(drop=True), result_df], axis=1)
+
+    return final_df
+
+def preprocess_25(markerid_df, KOSTAT_df): # markerid_5의 'sido'/'gungu'/'[P24K]address.hname'이 통계청 자료와 일치하면 인구통계 불러와서 markerid_6으로 저장
+    # markerid_df 의 sido, gungu, dong이 KOSTAT_df의 [P22]시도,[P22]군구,[P22]읍면동 이랑 모두 일치하면, 
+    #     KOSTAT_df의 열들 다 가져와서 markerid_df 뒤에다가 추가하기. 
+    #       각 새로 추가한 열의 이름은 기존 KOSTAT_1의 열이름 앞에 [P23]blabla 라고 기입하기 
+    # return df
+    """
+    For each row in markerid_df, match with KOSTAT_df where:
+    markerid_df['sido'], 'gungu', '[P24K]address.region_3depth_h_name' == KOSTAT_df['[P22]시도'], '[P22]군구'], '[P22]읍면동']
+    Then append all KOSTAT_df columns (with renamed prefix) to markerid_df.
+    """
+    df = markerid_df.copy()
+
+    # Define columns to match on
+    merge_cols_markerid = ['sido', 'gungu', '[P24K]address.region_3depth_h_name']
+    merge_cols_kostat = ['[P22]시도', '[P22]군구', '[P22]읍면동']
+
+    # Perform the merge
+    merged_df = df.merge(
+        KOSTAT_df,
+        left_on=merge_cols_markerid,
+        right_on=merge_cols_kostat,
+        how='left'
+    )
+
+    # Identify new columns to rename (exclude the original markerid_df columns)
+    new_cols = [col for col in merged_df.columns if col not in df.columns]
+
+    # Rename the KOSTAT columns with prefix [P23]
+    renamed = {col: f"[P25]{col}" for col in new_cols if col not in merge_cols_kostat}
+    merged_df.rename(columns=renamed, inplace=True)
+
+    return merged_df
 
 
 
