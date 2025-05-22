@@ -25,7 +25,7 @@ from functions import get_sido_info, get_gungu_info, get_dong_info, get_apt_list
 from functions import combine_excel, preview
 from functions import load_step, load_csv, store_result, count_unmapped
 from functions import unique_df, mapping, update_key, update_key_new
-from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16, preprocess_17, preprocess_18, preprocess_19, preprocess_20, preprocess_21, preprocess_22, preprocess_23, preprocess_24, preprocess_25, preprocess_26
+from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16, preprocess_17, preprocess_18, preprocess_19, preprocess_20, preprocess_21, preprocess_22, preprocess_23, preprocess_24, preprocess_25, preprocess_26, preprocess_27
 from functions import classify_search_result, multiple_id_search
 
 if __name__ == "__main__":
@@ -177,6 +177,10 @@ if __name__ == "__main__":
     # res = preprocess_26(step_16_df, markerid_6_df)
     # store_result(res, 'step_17')
     
+    '''Preprocessing 27''' # * ln 가격 열 추가.  
+    # df = load_step(17)
+    # res = preprocess_27(df)
+    # store_result(res, 'step_18')
     
     
     
@@ -185,15 +189,10 @@ if __name__ == "__main__":
     
     
     
+    # * 나머지 열 정리 = 필요한거만 남기기
+    # * 세대당 주차수
     
-    
-    # markerid_4의 행정동으로 KOSTAT_1의 통계자료를 markerid_4에 열로 추가하기
-    
-    # markerid_4의 새로운 인구통계를 step_16이랑 markerid이용해서 step_16에 추가하기.  
-    
-    
-    
-    # step_16을 [KEY]markerid으로 markerid_3.csv에 매핑해서 자료 데이터 가져오기.
+
     
     
     

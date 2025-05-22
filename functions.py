@@ -1294,7 +1294,32 @@ def preprocess_26(step_df, markerid_df):
 
     return merged
 
+def preprocess_27(df): # ln가격 계산해서 기입.
+    '''[ROLE] Calculate ln(거래금액(만원)) and insert it after 거래금액(만원)'''
+    df = df.copy()
 
+    # Calculate log(price)
+    df["[P27]ln가격"] = np.log(pd.to_numeric(df["거래금액(만원)"], errors='coerce'))
+
+    # Find index of price column
+    insert_index = df.columns.get_loc("거래금액(만원)") + 1
+
+    # Reorder columns to insert log column after price
+    cols = list(df.columns)
+    log_col = cols.pop(cols.index("[P27]ln가격"))
+    cols.insert(insert_index, log_col)
+    df = df[cols]
+
+    print("✅ [P27]ln가격 inserted.")
+    return df
+    
+    '''Preprocess'''
+    # 가격 열 이름 = '거래금액(만원)'
+    # ln가격 열 = ln(거래금액(만원)
+    # 새로운 열 기입 위치: 거래금액(만원) 바로 다음에. 
+    
+    
+    
 
 
 
