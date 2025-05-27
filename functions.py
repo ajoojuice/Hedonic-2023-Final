@@ -14,6 +14,7 @@ from urllib.parse import quote
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -1317,10 +1318,60 @@ def preprocess_27(df): # ln가격 계산해서 기입.
     # 가격 열 이름 = '거래금액(만원)'
     # ln가격 열 = ln(거래금액(만원)
     # 새로운 열 기입 위치: 거래금액(만원) 바로 다음에. 
-    
-    
-    
 
+def preprocess_28(df):
+    """
+    Crawl 세대수 and 동수 from new.land.naver.com using markerids in df.
+    Adds columns [P28W]세대수 and [P28W]동수 to df.
+    """
 
+    options = Options()
+    # options.add_argument("--headless")  # uncomment for background running
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("user-agent=Mozilla/5.0")
 
+    service = Service("/opt/homebrew/bin/chromedriver")
+    driver = webdriver.Chrome(service=service, options=options)
+
+    wait = WebDriverWait(driver, 7)
+
+    results = []
+
+    for markerid in tqdm(df["[KEY]markerid"].dropna().astype(str)):
+        url = f"https://new.land.naver.com/complexes/{markerid}?ms=35.242394,129.012976,17&a=APT:ABYG:JGC:PRE&e=RETAIL"
+        result = {
+            "[KEY]markerid": markerid,
+            "[P28W]세대수": None,
+            "[P28W]동수": None
+        }
+
+        try:
+            driver.get(url)
+
+            # Wait for the <dt> elements to load
+            wait.until(EC.presence_of_element_located((By.TAG_NAME, "dt")))
+            soup = BeautifulSoup(driver.page_source, "html.parser")
+            dts = soup.find_all("dt")
+
+            for dt in dts:
+                label = dt.text.strip()
+                if label == "세대수":
+                    dd = dt.find_next_sibling("dd")
+                    result["[P28W]세대수"] = dd.text.strip() if dd else None
+                elif label == "동수":
+                    dd = dt.find_next_sibling("dd")
+                    result["[P28W]동수"] = dd.text.strip() if dd else None
+
+        except Exception as e:
+            print(f"❌ {markerid} failed: {e}")
+
+        results.append(result)
+        print(result)
+    driver.quit()
+
+    result_df = pd.DataFrame(results)
+    merged_df = df.merge(result_df, on="[KEY]markerid", how="left")
+
+    return merged_df
 

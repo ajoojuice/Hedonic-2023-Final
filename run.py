@@ -25,7 +25,7 @@ from functions import get_sido_info, get_gungu_info, get_dong_info, get_apt_list
 from functions import combine_excel, preview
 from functions import load_step, load_csv, store_result, count_unmapped
 from functions import unique_df, mapping, update_key, update_key_new
-from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16, preprocess_17, preprocess_18, preprocess_19, preprocess_20, preprocess_21, preprocess_22, preprocess_23, preprocess_24, preprocess_25, preprocess_26, preprocess_27
+from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16, preprocess_17, preprocess_18, preprocess_19, preprocess_20, preprocess_21, preprocess_22, preprocess_23, preprocess_24, preprocess_25, preprocess_26, preprocess_27, preprocess_28
 from functions import classify_search_result, multiple_id_search
 
 if __name__ == "__main__":
@@ -181,6 +181,12 @@ if __name__ == "__main__":
     # df = load_step(17)
     # res = preprocess_27(df)
     # store_result(res, 'step_18')
+    
+    '''Preprocessing 28'''
+    # df = load_step(18)
+    # res = preprocess_28(df)
+    # store_result(res, 'step_19')
+    
     
     
     
