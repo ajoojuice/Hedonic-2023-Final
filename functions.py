@@ -17,9 +17,9 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import WebDriverException
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from selenium.webdriver.support import expected_conditions as EC
-
 
 # Set display options for better spacing
 pd.set_option('display.max_columns', None)        # show all columns
@@ -1317,11 +1317,14 @@ def preprocess_27(df): # ln가격 계산해서 기입.
     print(f"✅ [P27]ln가격 inserted. Missing log values: {n_missing}")
     return df
 
-def preprocess_28(df): # 세대수 동수 크롤링
+def preprocess_28(df):
     """
-    Crawl 세대수 and 동수 from new.land.naver.com using unique markerids in df,
-    skipping any 'UNMAPPED' values.
+    Crawl 세대수, 동수, and 최고층 from new.land.naver.com using unique markerids in df.
+    Supports pause/resume using crawling_progress_temp_save.csv.
+    Automatically retries on network failures.
     """
+
+    TEMP_SAVE_PATH = "crawling_progress_temp_save.csv"
 
     options = Options()
     # options.add_argument("--headless")  # enable for background crawling
@@ -1336,22 +1339,42 @@ def preprocess_28(df): # 세대수 동수 크롤링
 
     results = []
 
-    # 💡 Skip NaNs and 'UNMAPPED' values
+    # 💡 Clean markerids
     unique_ids = df["[KEY]markerid"]
     unique_ids = unique_ids.dropna().astype(str)
     unique_ids = unique_ids[unique_ids != "UNMAPPED"].unique()
 
+    # ✅ Load previous progress
+    if os.path.exists(TEMP_SAVE_PATH):
+        previous_df = pd.read_csv(TEMP_SAVE_PATH, dtype=str)
+        crawled_ids = set(previous_df["[KEY]markerid"].astype(str))
+        print(f"🔄 Resuming from previous run, skipping {len(crawled_ids)} entries.")
+    else:
+        previous_df = pd.DataFrame()
+        crawled_ids = set()
+
     for markerid in tqdm(unique_ids):
+        if markerid in crawled_ids:
+            continue
+
         url = f"https://new.land.naver.com/complexes/{markerid}?ms=35.242394,129.012976,17&a=APT:ABYG:JGC:PRE&e=RETAIL"
         result = {
             "[KEY]markerid": markerid,
             "[P28W]세대수": None,
-            "[P28W]동수": None
+            "[P28W]동수": None,
+            "[P28W]최고층": None
         }
 
+        while True:
+            try:
+                driver.get(url)
+                wait.until(EC.presence_of_element_located((By.TAG_NAME, "dt")))
+                break
+            except WebDriverException:
+                print(f"🌐 Network error for {markerid}, retrying in 15 sec...")
+                time.sleep(15)
+
         try:
-            driver.get(url)
-            wait.until(EC.presence_of_element_located((By.TAG_NAME, "dt")))
             soup = BeautifulSoup(driver.page_source, "html.parser")
             dts = soup.find_all("dt")
 
@@ -1364,8 +1387,38 @@ def preprocess_28(df): # 세대수 동수 크롤링
                     dd = dt.find_next_sibling("dd")
                     result["[P28W]동수"] = dd.text.strip() if dd else None
 
-            print(f"✅ {markerid}: 세대수={result['[P28W]세대수']}, 동수={result['[P28W]동수']}")
+            # ✅ Click the 단지정보 button
+            try:
+                btn = wait.until(EC.presence_of_element_located((By.XPATH, '//button[contains(text(), "단지정보")]')))
+                driver.execute_script("arguments[0].scrollIntoView({behavior: 'instant', block: 'center'});", btn)
+                time.sleep(0.5)
+
+                if btn.is_displayed() and btn.is_enabled():
+                    btn.click()
+                else:
+                    driver.execute_script("arguments[0].click();", btn)
+
+                time.sleep(1)
+
+                # Parse new HTML after button click
+                soup = BeautifulSoup(driver.page_source, "html.parser")
+                ths = soup.find_all("th", class_="table_th")
+
+                for th in ths:
+                    if th.text.strip() == "저/최고층":
+                        td = th.find_next_sibling("td")
+                        if td:
+                            result["[P28W]최고층"] = td.text.strip()
+                        break
+
+            except Exception as e:
+                print(f"⚠️ Button click or 최고층 extraction failed for {markerid}: {e}")
+
+            print(f"✅ {markerid}: 세대수={result['[P28W]세대수']}, 동수={result['[P28W]동수']}, 최고층={result['[P28W]최고층']}")
             results.append(result)
+
+            # Save to temp file immediately
+            pd.DataFrame([result]).to_csv(TEMP_SAVE_PATH, mode="a", header=not os.path.exists(TEMP_SAVE_PATH), index=False)
 
         except Exception as e:
             print(f"⚠️ Skipped {markerid}: {e}")
@@ -1373,8 +1426,14 @@ def preprocess_28(df): # 세대수 동수 크롤링
 
     driver.quit()
 
-    result_df = pd.DataFrame(results)
+    # ✅ Combine with previously saved results
+    full_df = pd.read_csv(TEMP_SAVE_PATH, dtype=str)
+    result_df = pd.DataFrame(full_df)
     merged_df = df.merge(result_df, on="[KEY]markerid", how="left")
+
+    # ✅ Delete temp file
+    os.remove(TEMP_SAVE_PATH)
+    print("🗑️ Deleted temp file. Returning final merged dataframe.")
 
     return merged_df
 
@@ -1405,6 +1464,4 @@ def preprocess_30(df):  # 가구당 주차 결과: [P30]가구당주차
     print("✅ [P30] 가구당 주차 계산 완료.")
     return df
 
-  
-    
 
