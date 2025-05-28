@@ -1389,10 +1389,22 @@ def preprocess_29(df): # 통계 인구 비율 계산해서 기입. 결과: [P29]
     print("✅ [P29] 인구 비율 계산 완료.")
     return df
 
-def preprocess_30(df):
-    
-            
-    
+def preprocess_30(df):  # 가구당 주차 결과: [P30]가구당주차
 
+    # Step 1: Convert values to strings
+    households_raw = df["[P28W]세대수"].astype(str).str.replace(",", "").str.extract("(\d+)", expand=False)
+    parking_raw = df["[P26]주차"].astype(str).str.replace(",", "").str.extract("(\d+)", expand=False)
 
+    # Step 2: Convert to numeric (NaNs will be handled automatically)
+    households = pd.to_numeric(households_raw, errors="coerce")
+    parking_spaces = pd.to_numeric(parking_raw, errors="coerce")
+
+    # Step 3: Compute ratio
+    df["[P30]가구당주차"] = parking_spaces / households
+
+    print("✅ [P30] 가구당 주차 계산 완료.")
+    return df
+
+  
+    
 
