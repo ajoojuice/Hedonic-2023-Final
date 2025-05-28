@@ -1317,7 +1317,7 @@ def preprocess_27(df): # ln가격 계산해서 기입.
     print(f"✅ [P27]ln가격 inserted. Missing log values: {n_missing}")
     return df
 
-def preprocess_28(df):
+def preprocess_28(df): # 세대수 동수 크롤링
     """
     Crawl 세대수 and 동수 from new.land.naver.com using unique markerids in df,
     skipping any 'UNMAPPED' values.
@@ -1377,3 +1377,22 @@ def preprocess_28(df):
     merged_df = df.merge(result_df, on="[KEY]markerid", how="left")
 
     return merged_df
+
+def preprocess_29(df): # 통계 인구 비율 계산해서 기입. 결과: [P29]under_15ratio, [P29]over_65ratio
+    total = df["[P26]총인구(명)_합계"]
+    under15 = df["[P26]총인구(명)_15세미만"]
+    over65 = df["[P26]총인구(명)_65세이상"]
+
+    df["[P29]under_15ratio"] = under15 / total
+    df["[P29]over_65ratio"] = over65 / total
+
+    print("✅ [P29] 인구 비율 계산 완료.")
+    return df
+
+def preprocess_30(df):
+    
+            
+    
+
+
+
