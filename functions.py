@@ -1299,34 +1299,32 @@ def preprocess_27(df): # ln가격 계산해서 기입.
     '''[ROLE] Calculate ln(거래금액(만원)) and insert it after 거래금액(만원)'''
     df = df.copy()
 
+    # Remove commas and convert to numeric
+    cleaned_prices = df["거래금액(만원)"].str.replace(",", "", regex=False)
+    numeric_prices = pd.to_numeric(cleaned_prices, errors='coerce')
+
     # Calculate log(price)
-    df["[P27]ln가격"] = np.log(pd.to_numeric(df["거래금액(만원)"], errors='coerce'))
+    df["[P27]ln가격"] = np.log(numeric_prices)
 
-    # Find index of price column
+    # Insert the new column right after '거래금액(만원)'
     insert_index = df.columns.get_loc("거래금액(만원)") + 1
-
-    # Reorder columns to insert log column after price
     cols = list(df.columns)
     log_col = cols.pop(cols.index("[P27]ln가격"))
     cols.insert(insert_index, log_col)
     df = df[cols]
 
-    print("✅ [P27]ln가격 inserted.")
+    n_missing = df["[P27]ln가격"].isna().sum()
+    print(f"✅ [P27]ln가격 inserted. Missing log values: {n_missing}")
     return df
-    
-    '''Preprocess'''
-    # 가격 열 이름 = '거래금액(만원)'
-    # ln가격 열 = ln(거래금액(만원)
-    # 새로운 열 기입 위치: 거래금액(만원) 바로 다음에. 
 
 def preprocess_28(df):
     """
-    Crawl 세대수 and 동수 from new.land.naver.com using markerids in df.
-    Adds columns [P28W]세대수 and [P28W]동수 to df.
+    Crawl 세대수 and 동수 from new.land.naver.com using unique markerids in df,
+    skipping any 'UNMAPPED' values.
     """
 
     options = Options()
-    # options.add_argument("--headless")  # uncomment for background running
+    # options.add_argument("--headless")  # enable for background crawling
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
     options.add_argument("user-agent=Mozilla/5.0")
@@ -1334,11 +1332,16 @@ def preprocess_28(df):
     service = Service("/opt/homebrew/bin/chromedriver")
     driver = webdriver.Chrome(service=service, options=options)
 
-    wait = WebDriverWait(driver, 7)
+    wait = WebDriverWait(driver, 3)
 
     results = []
 
-    for markerid in tqdm(df["[KEY]markerid"].dropna().astype(str)):
+    # 💡 Skip NaNs and 'UNMAPPED' values
+    unique_ids = df["[KEY]markerid"]
+    unique_ids = unique_ids.dropna().astype(str)
+    unique_ids = unique_ids[unique_ids != "UNMAPPED"].unique()
+
+    for markerid in tqdm(unique_ids):
         url = f"https://new.land.naver.com/complexes/{markerid}?ms=35.242394,129.012976,17&a=APT:ABYG:JGC:PRE&e=RETAIL"
         result = {
             "[KEY]markerid": markerid,
@@ -1348,8 +1351,6 @@ def preprocess_28(df):
 
         try:
             driver.get(url)
-
-            # Wait for the <dt> elements to load
             wait.until(EC.presence_of_element_located((By.TAG_NAME, "dt")))
             soup = BeautifulSoup(driver.page_source, "html.parser")
             dts = soup.find_all("dt")
@@ -1363,15 +1364,16 @@ def preprocess_28(df):
                     dd = dt.find_next_sibling("dd")
                     result["[P28W]동수"] = dd.text.strip() if dd else None
 
-        except Exception as e:
-            print(f"❌ {markerid} failed: {e}")
+            print(f"✅ {markerid}: 세대수={result['[P28W]세대수']}, 동수={result['[P28W]동수']}")
+            results.append(result)
 
-        results.append(result)
-        print(result)
+        except Exception as e:
+            print(f"⚠️ Skipped {markerid}: {e}")
+            continue
+
     driver.quit()
 
     result_df = pd.DataFrame(results)
     merged_df = df.merge(result_df, on="[KEY]markerid", how="left")
 
     return merged_df
-
