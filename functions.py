@@ -1317,14 +1317,14 @@ def preprocess_27(df): # ln가격 계산해서 기입.
     print(f"✅ [P27]ln가격 inserted. Missing log values: {n_missing}")
     return df
 
-def preprocess_28(df):
+def preprocess_28(df): # new.land.naver.com에서 세대수, 동수, 최고층 크롤링해서 기입.
     """
     Crawl 세대수, 동수, and 최고층 from new.land.naver.com using unique markerids in df.
     Supports pause/resume using crawling_progress_temp_save.csv.
     Automatically retries on network failures.
     """
 
-    TEMP_SAVE_PATH = "crawling_progress_temp_save.csv"
+    TEMP_SAVE_PATH = "[P28]crawling_progress_temp_save.csv"
 
     options = Options()
     # options.add_argument("--headless")  # enable for background crawling
@@ -1510,6 +1510,7 @@ def preprocess_32(df): # spring, fall, winter column + 계약년 col 만들기.
     print("✅ [P32]spring/fall/winter columns created.")
     print("✅ [P32]계약년 column created.")
     return df
+
 
 
 
