@@ -1482,7 +1482,7 @@ def preprocess_31(df): # 열 '[P28W]최고층' 현재모습: "24/25층" --> "25"
     print("✅ [P31]최고층 생성 완료.")
     return df
 
-def preprocess_32(df): # spring, fall, winter column 만들기.
+def preprocess_32(df): # spring, fall, winter column + 계약년 col 만들기.
     """
     Adds 3 columns: [P32]spring, [P32]fall, [P32]winter
     based on the '계약년월' column, which is expected to be in the format YYYYMM.
@@ -1496,7 +1496,9 @@ def preprocess_32(df): # spring, fall, winter column 만들기.
 
     # Extract month part (last two digits of 계약년월)
     df["계약월"] = df["계약년월"].astype(str).str[-2:].astype(int)
-
+    # Extract year part (first four digits of 계약년월)
+    df["[P32]계약년"] = df["계약년월"].astype(str).str[:4].astype(int)
+    
     # Assign 1 to the correct seasonal column
     df.loc[df["계약월"].isin([3, 4, 5]), "[P32]spring"] = 1
     df.loc[df["계약월"].isin([9, 10, 11]), "[P32]fall"] = 1
@@ -1504,7 +1506,16 @@ def preprocess_32(df): # spring, fall, winter column 만들기.
 
     # Drop the helper column
     df.drop(columns=["계약월"], inplace=True)
-
+    #keep year column
     print("✅ [P32]spring/fall/winter columns created.")
+    print("✅ [P32]계약년 column created.")
     return df
+
+
+
+
+
+
+
+
 
