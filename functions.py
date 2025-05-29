@@ -1464,4 +1464,20 @@ def preprocess_30(df):  # 가구당 주차 결과: [P30]가구당주차
     print("✅ [P30] 가구당 주차 계산 완료.")
     return df
 
+def preprocess_31(df): # 열 '[P28W]최고층' 현재모습: "24/25층" --> "25"으로 바꾸기
+    # keep everything after the slash and convert to int
+    """
+    Create a new column '[P31]최고층_int' by extracting the highest floor as an integer
+    from '[P28W]최고층', which looks like '24/25층'.
+    """
+    def extract_highest(value):
+        if isinstance(value, str) and "/" in value:
+            try:
+                return int(value.split("/")[-1].replace("층", "").strip())
+            except ValueError:
+                return None
+        return None
 
+    df["[P31]최고층"] = df["[P28W]최고층"].apply(extract_highest)
+    print("✅ [P31]최고층 생성 완료.")
+    return df
