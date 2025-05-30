@@ -1,6 +1,14 @@
 # Ignore all CSV files
 *.csv
 
-# Ignore data output folder (adjust if needed)
-res csv/
+# Ignore Excel files
 *.xlsx
+
+# Ignore macOS system file
+.DS_Store
+
+# Ignore Python bytecode cache
+__pycache__/
+
+# Ignore the 'res csv' directory 
+res csv/
