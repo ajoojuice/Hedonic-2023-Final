@@ -109,44 +109,6 @@ def combine_excel(file_list):
         print("⚠️ No valid Excel files found.")
         return pd.DataFrame()
 
-'''df 편하게 보는 방법 함수'''
-def preview(df, filename="df_preview.html"):
-    style = """
-    <style>
-        table {
-            border-collapse: collapse;
-            width: 100%;
-        }
-        th, td {
-            white-space: nowrap;
-            padding: 6px 10px;
-            border: 1px solid #ccc;
-            text-align: center;
-        }
-        thead {
-            background-color: #f2f2f2;
-            position: sticky;
-            top: 0;
-        }
-        .scroll-container {
-            overflow-x: auto;
-            width: 100%;
-        }
-        body {
-            font-family: sans-serif;
-        }
-    </style>
-    """
-
-    html = df.to_html(index=False, escape=False)
-    full_html = f"{style}<div class='scroll-container'>{html}</div>"
-
-    with open(filename, "w", encoding="utf-8") as f:
-        f.write(full_html)
-
-    webbrowser.open("file://" + os.path.abspath(filename))
-    print(f"✅ Scrollable preview opened: {os.path.abspath(filename)}")
-
 # =================================================================================================
 '''Storing and Loading functions'''
 def load_step(n):
