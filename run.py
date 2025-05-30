@@ -23,7 +23,7 @@ from config import KAKAO_API_KEY
 from config import FINAL_COLUMN_MAPPING
 
 from functions import get_sido_info, get_gungu_info, get_dong_info, get_apt_list, make_df
-from functions import combine_excel, preview
+from functions import combine_excel
 from functions import load_step, load_csv, store_result, count_unmapped
 from functions import unique_df, mapping, update_key, update_key_new
 from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16, preprocess_17, preprocess_18, preprocess_19, preprocess_20, preprocess_21, preprocess_22, preprocess_23, preprocess_24, preprocess_25, preprocess_26, preprocess_27, preprocess_28, preprocess_29, preprocess_30, preprocess_31, preprocess_32, preprocess_33
@@ -248,20 +248,3 @@ if __name__ == "__main__":
     
     
     
-    
-    
-    
-    
-    
-    
-    
-    # * 나머지 열 정리 = 필요한거만 남기기.
-    
-    '''Preprocessing'''
-    # step_16(5000개의 데이터) --> step_2.csv의 (70,000) 데이터로 다시 뿌리기. 
-    # 결과 step_17.csv '[P2]시군구_단지명'을 기준으로 하기. 
-    # step_16의 불필요한 열들도 다 step_2에 추가하기. 
-    # step_17으로 저장. 
-    '''Preprocessing'''
-    # step_18.csv 는 클린 final version 만들기.
-        
