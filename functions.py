@@ -29,6 +29,7 @@ pd.set_option('display.unicode.east_asian_width', True)  # better for Korean spa
 
 from config import EXCEL_FILES, COMBINED_EXCEL_OUTPUT, COMBINED_CSV_OUTPUT, ROK_STAT_EXCEL_FILE
 from config import TARGET_SIDO_CODES, BASE_GUNGU_URL, BASE_DONG_URL, BASE_APT_URL, BASE_HEADERS, BASE_SIDO_URL
+from config import FINAL_COLUMN_MAPPING
 
 '''[NAVER] 네이버 부동산에서 모든 markerid 가져오기'''
 def get_sido_info():
@@ -1261,7 +1262,7 @@ def preprocess_26(step_df, markerid_df):
     """
     For each row in step_df, find matching row in markerid_df by [KEY]markerid.
     Append columns from column 12 onward from markerid_df to step_df.
-    Rename the appended columns to start with [P25] instead of [Pxx].
+    Rename the appended columns to start with [P26] instead of [Pxx].
     """
     step_df = step_df.copy()
     markerid_df = markerid_df.copy()
@@ -1511,8 +1512,72 @@ def preprocess_32(df): # spring, fall, winter column + 계약년 col 만들기.
     print("✅ [P32]계약년 column created.")
     return df
 
+def preprocess_33(old_df: pd.DataFrame, new_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Enrich transaction-level old_df with apartment/district-level info from new_df
+    using '[P2]시군구_단지명' as the key. Only columns that do not already exist in old_df
+    are added. Existing transaction-specific columns are preserved.
 
+    Parameters:
+        old_df (pd.DataFrame): Full transaction-level DataFrame (~70,000 rows)
+        new_df (pd.DataFrame): Unique apartment-level DataFrame (~5,000 rows)
 
+    Returns:
+        pd.DataFrame: Enriched DataFrame with same row count as old_df
+    """
+    key = '[P2]시군구_단지명'
+
+    # ✅ Check key exists
+    if key not in old_df.columns or key not in new_df.columns:
+        raise KeyError(f"❌ Merge key '{key}' must exist in both DataFrames.")
+
+    # ✅ Ensure uniqueness of key in new_df
+    if not new_df[key].is_unique:
+        raise ValueError(f"❌ Column '{key}' must be unique in new_df.")
+
+    # ✅ Determine new columns to add (exclude key + anything already in old_df)
+    cols_to_add = [col for col in new_df.columns if col != key and col not in old_df.columns]
+
+    if not cols_to_add:
+        print("ℹ️ No new columns to add from new_df. Returning original DataFrame.")
+        return old_df.copy()
+
+    # ✅ Prepare the subset of new_df for merging
+    enrichment_df = new_df[[key] + cols_to_add]
+
+    # ✅ Perform the merge (left join keeps 70,000 rows)
+    enriched_df = old_df.merge(enrichment_df, on=key, how='left')
+    
+    # ✅ Move '[KEY]markerid' to the front if it exists
+    if '[KEY]markerid' in enriched_df.columns:
+        cols = ['[KEY]markerid'] + [col for col in enriched_df.columns if col != '[KEY]markerid']
+        enriched_df = enriched_df[cols]
+    
+    return enriched_df
+
+def clean_cols(df: pd.DataFrame, column_mapping: dict) -> pd.DataFrame:
+    """
+    Returns a new DataFrame with columns renamed and ordered based on the given mapping.
+    Missing columns will raise an error.
+    
+    Parameters:
+        df (pd.DataFrame): The original DataFrame
+        column_mapping (dict): Mapping of final column names to existing column names (or None for empty)
+
+    Returns:
+        pd.DataFrame: A new DataFrame with renamed, reordered, and padded columns.
+    """
+    final_df = pd.DataFrame()
+
+    for final_col, source_col in column_mapping.items():
+        if source_col is None:
+            final_df[final_col] = ""  # Empty placeholder
+        else:
+            if source_col not in df.columns:
+                raise KeyError(f"❌ Column '{source_col}' not found in DataFrame. Please check config or df.columns.")
+            final_df[final_col] = df[source_col]
+
+    return final_df
 
 
 
