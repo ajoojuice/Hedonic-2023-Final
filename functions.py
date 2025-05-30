@@ -5,17 +5,21 @@ import json
 import webbrowser
 import os
 import re
+import ast
 import time
 import threading
 from tqdm import tqdm
+from bs4 import BeautifulSoup
+from urllib.parse import quote
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import WebDriverException
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from selenium.webdriver.support import expected_conditions as EC
-
 
 # Set display options for better spacing
 pd.set_option('display.max_columns', None)        # show all columns
@@ -23,8 +27,9 @@ pd.set_option('display.width', 1000)              # set max line width
 pd.set_option('display.max_colwidth', None)       # don't truncate cell values
 pd.set_option('display.unicode.east_asian_width', True)  # better for Korean spacing
 
-from config import EXCEL_FILES, COMBINED_EXCEL_OUTPUT, COMBINED_CSV_OUTPUT
+from config import EXCEL_FILES, COMBINED_EXCEL_OUTPUT, COMBINED_CSV_OUTPUT, ROK_STAT_EXCEL_FILE
 from config import TARGET_SIDO_CODES, BASE_GUNGU_URL, BASE_DONG_URL, BASE_APT_URL, BASE_HEADERS, BASE_SIDO_URL
+from config import FINAL_COLUMN_MAPPING
 
 '''[NAVER] 네이버 부동산에서 모든 markerid 가져오기'''
 def get_sido_info():
@@ -154,7 +159,6 @@ def load_csv(file_name):
     if not os.path.exists(path):
         raise FileNotFoundError(f"{file_name} result not found at {path}")
     return pd.read_csv(path)
-
 def store_result(df, file_name):
     path = f"res csv/{file_name}.csv"
     if not os.path.exists(path):
@@ -229,7 +233,7 @@ def mapping(source_file, source_column, target_file, target_column, call_column,
 
     return source_df
 
-
+def update_key(df):
     """
     [ROLE] Create or update [KEY]markerid column at index 0.
     Ensures most recent [P#]markerid columns are ordered by descending step (P10, P7, P5, etc.).
@@ -336,6 +340,25 @@ def update_key(df): # [MOLIT] step_5.csv에 1열 All_markerid 열 추가하기
 
     return df
 
+def count_unmapped(df):
+    unmapped_count = (df.iloc[:, 0] == "UNMAPPED").sum()
+    print(f"🔍 UNMAPPED count: {unmapped_count}")
+
+def update_key_new(df):
+    df = df.copy()
+    second_col = df.columns[1]
+
+    condition = (
+        df[second_col].apply(lambda x: str(x).isdigit()) &
+        (df["[KEY]markerid"] == "UNMAPPED")
+    )
+
+    update_count = condition.sum()
+    df.loc[condition, "[KEY]markerid"] = df.loc[condition, second_col]
+
+    print(f"✅ Updated {update_count} rows from {second_col} to [KEY]markerid.")
+    return df
+
 
 # Thread-local storage to keep one driver per thread
 thread_local = threading.local()
@@ -402,6 +425,236 @@ def crawl(df, source_col, new_col_name, max_workers=5):
 
     print(f"🟢 Finished crawling. {sum(v != 'UNMAPPED' for v in results.values())} / {len(results)} mapped.")
     return df
+
+def crawl_id(df,source_column_name, insert_data_after_which_col):
+    source = df[source_column_name].tolist()
+    
+    results = []
+
+    for marker_id in tqdm(source):
+        url = f'https://fin.land.naver.com/complexes/{marker_id}?tab=complex-info'
+        headers = {
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': 'https://fin.land.naver.com/',
+            'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+        }
+
+        try:
+            res = requests.get(url, headers=headers, timeout=10)
+            soup = BeautifulSoup(res.text, 'html.parser')
+
+            # Find the script tag containing the JSON data
+            script_tag = next((s.text for s in soup.find_all("script") if '"dehydratedState"' in s.text), None)
+            if not script_tag:
+                raise ValueError("JSON data not found in page")
+
+            # Extract and parse the JSON object
+            json_start = script_tag.find('{"props":')
+            json_end = script_tag.rfind('}') + 1
+            json_blob = script_tag[json_start:json_end]
+            parsed = json.loads(json_blob)
+            queries = parsed['props']['pageProps']['dehydratedState']['queries']
+
+            # Extract apartment details from JSON
+            data = {}
+            for q in queries:
+                result = q.get("state", {}).get("data", {}).get("result", {})
+                if "address" in result:
+                    address = result["address"].get("roadName")
+                    zip_code = result["address"].get("zipCode")
+                    approval_date = result.get("useApprovalDate")
+                    household_count = result.get("totalHouseholdNumber")
+                    heating_type = result.get("heatingAndCoolingInfo", {}).get("heatingEnergyType")
+                    parking = result.get("parkingInfo", {}).get("totalParkingCount")
+
+                    data = {
+                        "[P15]markerId": marker_id,
+                        "[P15]주소": address,
+                        "[P15]사용승인일": approval_date,
+                        "[P15]세대수": household_count,
+                        "[P15]난방": heating_type,
+                        "[P15]주차": parking,
+                        "[P15]우편번호": zip_code
+                    }
+                    break
+
+            if not data:
+                data = {"[P15]markerId": marker_id, "[P15]주소": None, "[P15]사용승인일": None, "[P15]세대수": None, "[P15]난방": None, "[P15]주차": None, "[P15]우편번호": None}
+
+            results.append(data)
+            print(data)
+
+        except Exception as e:
+            results.append({
+                "[P15]markerId": marker_id,
+                "[P15]주소": None,
+                "[P15]사용승인일": None,
+                "[P15]세대수": None,
+                "[P15]난방": None,
+                "[P15]주차": None,
+                "[P15]우편번호": None,
+                "[P15]Error": str(e)
+            })
+
+    # Convert to DataFrame and show
+    results_df = pd.DataFrame(results)
+    print(f"[P15] results: first 20 lines")
+    print(results_df[:20])
+    
+    # Reset index to ensure proper merge
+    results_df.index = df.index  # ensures alignment with original df
+
+    # Determine insertion point
+    insert_index = df.columns.get_loc(insert_data_after_which_col) + 1
+
+    # Split df into parts and insert
+    df_front = df.iloc[:, :insert_index]
+    df_back = df.iloc[:, insert_index:]
+    df_combined = pd.concat([df_front, results_df, df_back], axis=1)
+
+    return df_combined
+
+# NORESULT / MULTIPLE 결과 분류해줌.
+def classify_search_result(url):
+    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    if "검색결과가 없습니다" in soup.text:
+        return "NORESULT"
+    return "MULTIPLE"
+
+def multiple_id_search(df, col_name):
+    # Ensure new column exists and is initially blank
+    df["[P14]multiple_results"] = None
+
+    # Insert the new column just to the right of [KEY]markerid
+    cols = df.columns.tolist()
+    marker_idx = cols.index("[KEY]markerid")
+    # Move [P14]multiple_results right after it
+    cols.remove("[P14]multiple_results")
+    cols.insert(marker_idx + 1, "[P14]multiple_results")
+    df = df[cols]  # Reorder columns
+
+    # Target only unmapped rows
+    target_rows = df[df["[KEY]markerid"] == "UNMAPPED"].copy()
+    print(f"🔍 Crawling markerIds for {len(target_rows)} unmapped entries...")
+
+    for idx, row in tqdm(target_rows.iterrows(), total=len(target_rows)):
+        term = row[col_name]
+        print(f"\n📌 Searching: {term}")
+        encoded_term = quote(term)
+        url = f"https://m.land.naver.com/search/result/{encoded_term}"
+        print(f"🔗 URL: {url}")
+
+        result = classify_search_result(url)
+        print(f"🧾 Result: {result}")
+
+        if result == "NORESULT":
+            df.at[idx, "[P14]multiple_results"] = "NORESULT"
+        else:
+            # MULTIPLE
+            response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            soup = BeautifulSoup(response.text, 'html.parser')
+            a_tags = soup.find_all('a', href=True)
+
+            marker_ids = []
+
+            for a in a_tags:
+                href = a['href']
+                if href.startswith("/complex/info/"):
+                    marker_id = href.split("/")[3]
+                    marker_ids.append(marker_id)
+
+            print(f"📌 Marker IDs: {marker_ids}")
+            df.at[idx, "[P14]multiple_results"] = marker_ids  # stored as list
+
+    return df  # return updated DataFrame
+
+def match_marker_ids_by_region(df_step12, df_markerid):
+    """
+    Matches candidate markerIds in [P14]multiple_results to actual rows in markerid_3
+    based on **시, **구, **동.
+    Inserts new column [P16]match after [KEY]markerid.
+    """
+
+    match_results = []
+
+    for idx, row in df_step12.iterrows():
+        raw_candidates = row.get("[P14]multiple_results", "")
+        # Skip cases: empty, NORESULT, or "[]"
+        if pd.isna(raw_candidates) or raw_candidates.strip() in ["", "NORESULT", "[]"]:
+            match_results.append(None)
+            continue
+        try:
+            # Safely parse stringified list (e.g., "['1036', '12345']")
+            candidate_ids = ast.literal_eval(raw_candidates)
+            if not isinstance(candidate_ids, list):
+                match_results.append("NOTFOUND")
+                continue
+        except Exception:
+            match_results.append("NOTFOUND")
+            continue
+
+        # Row-level 시/구/동 to match against
+        target_sido = str(row.get("**시", "")).strip()
+        target_gungu = str(row.get("**구", "")).strip()
+        target_dong = str(row.get("**동", "")).strip()
+        print(f"source: {target_sido}, {target_gungu}, {target_dong}")
+
+        matched_ids = []
+        for marker_id in tqdm(candidate_ids):
+            df_markerid["complexNo"] = df_markerid["complexNo"].astype(str)
+            match_row = df_markerid[df_markerid["complexNo"] == marker_id]
+            if not match_row.empty:
+                sido = str(match_row.iloc[0]["sido"]).strip()
+                gungu = str(match_row.iloc[0]["gungu"]).strip()
+                dong = str(match_row.iloc[0]["dong"]).strip()
+
+                if (sido == target_sido) and (gungu == target_gungu) and (dong == target_dong):
+                    matched_ids.append(marker_id)
+
+        # Result logic
+        if not matched_ids:
+            match_results.append("NOTFOUND")
+        elif len(matched_ids) == 1:
+            match_results.append(matched_ids[0])
+        else:
+            match_results.append(matched_ids)
+
+    # Insert result column into original df_step12
+    result_series = pd.Series(match_results, name="[P16]match")
+    insert_index = df_step12.columns.get_loc("[KEY]markerid") + 1
+
+    df_with_match = pd.concat([
+        df_step12.iloc[:, :insert_index],
+        result_series,
+        df_step12.iloc[:, insert_index:]
+    ], axis=1)
+
+    return df_with_match
+
+def check_address_uniqueness(df_step14, df_markerid):
+    """
+    Checks whether 도로명 in df_step14 and [P15]주소 in df_markerid are unique.
+    If not, prints the duplicated values with counts.
+    """
+
+    print("🔍 Checking uniqueness of 도로명 in step_14...")
+    if df_step14["도로명"].is_unique:
+        print("✅ '도로명' is unique in step_14.")
+    else:
+        print("❌ '도로명' is NOT unique. Duplicates:")
+        dup_road = df_step14["도로명"].value_counts()
+        print(dup_road[dup_road > 1].head(10))  # show top 10 duplicates
+
+    print("\n🔍 Checking uniqueness of [P15]주소 in markerid_3...")
+    if df_markerid["[P15]주소"].is_unique:
+        print("✅ '[P15]주소' is unique in markerid_3.")
+    else:
+        print("❌ '[P15]주소' is NOT unique. Duplicates:")
+        dup_addr = df_markerid["[P15]주소"].value_counts()
+        print(dup_addr[dup_addr > 1].head(10))  # show top 10 duplicates
+
 
 # =================================================================================================
 '''[MOLIT] Preprocessing functions'''
@@ -595,5 +848,740 @@ def preprocess_13(df): # "[P12]크롤링준비_시구단지명"를 m.land.naver.
     '''
     return crawl(df, "[P12]크롤링준비_시구단지명", "[P13]markerid")
 
-def preprocess_14(df):
-    df
+def preprocess_14(df): # "[P12]크롤링준비_시군구단지명"을 검색했을때 여러값 나오는 markerid들 다 불러와서 기록하기.
+    return multiple_id_search(df, "[P12]크롤링준비_시구단지명")
+    
+def preprocess_15(df): # [markerid_3]의 complexNo를 네이버 크롤링해서 "[P6]..."열 뒤에 정보 삽입하기 (ex: [P15]주소, [P15]주차) 
+    return crawl_id(df, "complexNo", "[P6]시군구_단지명_cleaned_(주상복합)(도시형)")
+
+def preprocess_16(df): # [MOLIT]의 [P14]multiple_results열의 값들에 대한 **시, **구, **동을 markerid_3의 sido, gungu, dong이랑 비교
+    markerid_3_df = load_csv('markerid_3')
+    return match_marker_ids_by_region(df,markerid_3_df)
+
+def preprocess_17(df): # [MOLIT]의 [P16]match열이 하나의 값만 있으면 update [KEY]markerid해줌.
+    """
+    if df의 column "[P16]match" has only one value 
+        then: 그 value만 "[KEY]markerid" 열에 업데이트 하기.
+    For rows where [P16]match contains a single ID (not a list, not empty, not NOTFOUND),
+    update [KEY]markerid with that ID. Otherwise, leave as is.
+    Prints how many rows were updated and how many are still UNMAPPED.
+    """
+    updated_markerids = []
+    updated_count = 0
+
+    for idx, row in df.iterrows():
+        match_val = row.get("[P16]match")
+
+        if pd.isna(match_val) or match_val in ["", "NOTFOUND"]:
+            updated_markerids.append(row["[KEY]markerid"])
+            continue
+
+        if isinstance(match_val, str) and match_val.startswith("[") and match_val.endswith("]"):
+            updated_markerids.append(row["[KEY]markerid"])
+            continue
+        
+        updated_markerids.append(match_val)
+        updated_count += 1
+
+    # Apply updated markerids
+    df = df.copy()
+    df["[KEY]markerid"] = updated_markerids
+
+    # Count how many are still unmapped
+    still_unmapped = (df["[KEY]markerid"] == "UNMAPPED").sum()
+    total_rows = len(df)
+    mapped = total_rows-still_unmapped
+    print(f"✅[P17] Updated {updated_count} rows")
+    print(f"🔍 {mapped}/{total_rows} Done. Still unmapped: {still_unmapped} rows")
+
+    return df
+
+def preprocess_18(df_step14, df_markerid): # unique도로명 & unique[P15]주소 map해서 complexNo 가져옴
+    """
+    Create a new column [P18]markerid in df_step14 by matching 도로명 (from df_step14)
+    with [P15]주소 (from df_markerid), only if both sides are unique.
+    Returns the updated df_step14 with the new column inserted after [KEY]markerid.
+    """
+    def update_markerid_from_P18(df):
+        df = df.copy()
+        total_rows = len(df)
+        
+        condition = (
+            (df["[KEY]markerid"] == "UNMAPPED") &
+            (df["[P18]markerid"].notna()) &
+            (df["[P18]markerid"] != "DUPLICATE")
+        )
+
+        df.loc[condition, "[KEY]markerid"] = df.loc[condition, "[P18]markerid"]
+        
+        total_mapped = (df["[KEY]markerid"] != "UNMAPPED").sum()
+        
+        print(f"✅ [KEY]markerid updated from [P18]markerid: {condition.sum()} rows")
+        print(f"📊 Total mapped: {total_mapped} / {total_rows}")
+        
+        return df
+
+    df = df_step14.copy()
+
+    # Step 1: Identify non-unique 도로명 in df_step14
+    duplicated_roadnames = set(df_step14["도로명"][df_step14["도로명"].duplicated(keep=False)])
+
+    # Step 2: Identify non-unique [P15]주소 in df_markerid
+    duplicated_addresses = df_markerid["[P15]주소"][df_markerid["[P15]주소"].duplicated(keep=False)]
+
+    # Step 3: Create a mapping from 주소 to complexNo (only for unique addresses)
+    unique_markerid = df_markerid[~df_markerid["[P15]주소"].isin(duplicated_addresses)]
+    address_to_id = dict(zip(unique_markerid["[P15]주소"], unique_markerid["complexNo"]))
+
+    # Step 4: Initialize the new column
+    new_col = []
+
+    unique_processed = 0
+    duplicates_skipped = 0
+    no_match = 0
+
+    for _, row in df.iterrows():
+        roadname = row["도로명"]
+
+        if roadname in duplicated_roadnames:
+            new_col.append("DUPLICATE")
+            duplicates_skipped += 1
+        elif roadname in address_to_id:
+            new_col.append(address_to_id[roadname])
+            unique_processed += 1
+        else:
+            new_col.append(None)
+            no_match += 1
+
+    # Step 5: Insert the new column after [KEY]markerid
+    insert_index = df.columns.get_loc("[KEY]markerid") + 1
+    df.insert(insert_index, "[P18]markerid", new_col)
+
+    # Step 6: Print summary
+    total = len(df)
+    print(f"✅ [P18]Unique rows processed and matched: {unique_processed}")
+    print(f"❌ [P18]Duplicates skipped: {duplicates_skipped}")
+    print(f"🔍 [P18]Rows with no match found: {no_match}")
+    print(f"📊 [P18]Total rows: {total}")
+    
+    df = update_markerid_from_P18(df)
+    return df
+
+    
+    
+    
+    
+    
+    # 0. 새로운 열 만들기 = [P18]markerid: step_14 에대가 [KEY]markerid 다음에 추가할거임. 
+    # 1. not unique 한 애들 찾고 제외하기. 새로운 열에 DUPLICATE이라고 기입
+    # 2. unique한 애들로만 가지고 놀거임.
+    # 3. row by row 내려가면서: if 도로명 is unique, then search in markerid_3의 [P15]주소에 match 해서 결과로 complexNo가져와서 새로운 열게 기입. 
+    
+def preprocess_19(df_edge_case, df_markerid3): # [EDGE_CASE]중에서 unique"도로명"& unique markerid_3  
+    """
+    df_edge_case의 "도로명" column 에서 Duplicate 값들 제외. Unique value들에 대해서만 각자 df_markerid3에 검색해서, complexNo 가져옴. 
+        df_markerid3의 "[P15]주소" columnd애 검색하면 됨. 
+        df_edge_case의 "도로명"의 uniqueness검사할때는, "도로명" column안에서만 검색하는것. 
+        
+        unique한 애들을 markerid3에 검색하고 그 결과도 unique 한 경우, complexNo 가져와서 기입하기. 
+            기입 위치는 df_edge_case의 첫번째열인 [KEY]markerid 의 옆인 새로운 열 추가하기
+                새로운 열의 이름은 [P19]markerid
+    """
+    """
+    Match unique 도로명 in df_edge_case to unique [P15]주소 in df_markerid3.
+    - If 도로명 is duplicated in df_edge_case: label as 'DUPL:edge'
+    - If result is duplicated in df_markerid3: label as 'DUPL:markerid3'
+    - If no match found: label as 'FAILED2MAP'
+    - If unique match found: assign the complexNo
+    Returns df_edge_case with new column [P19]markerid inserted after [KEY]markerid.
+    """
+
+    df = df_edge_case.copy()
+
+    # Step 1: Identify duplicates
+    duplicated_in_edge = set(df["도로명"][df["도로명"].duplicated(keep=False)])
+    duplicated_in_markerid3 = set(
+        df_markerid3["[P15]주소"][df_markerid3["[P15]주소"].duplicated(keep=False)]
+    )
+
+    # Step 2: Build mapping from [P15]주소 → complexNo (only keep unique ones)
+    unique_markerid3 = df_markerid3[~df_markerid3["[P15]주소"].isin(duplicated_in_markerid3)]
+    address_to_complexNo = dict(zip(unique_markerid3["[P15]주소"], unique_markerid3["complexNo"]))
+
+    # Step 3: Apply logic row-by-row
+    results = []
+    count_map = {
+        "mapped": 0,
+        "DUPL:edge": 0,
+        "DUPL:markerid3": 0,
+        "FAILED2MAP": 0
+    }
+
+    for _, row in df.iterrows():
+        roadname = row["도로명"]
+
+        if roadname in duplicated_in_edge:
+            results.append("DUPL:edge")
+            count_map["DUPL:edge"] += 1
+        elif roadname in duplicated_in_markerid3:
+            results.append("DUPL:markerid3")
+            count_map["DUPL:markerid3"] += 1
+        elif roadname in address_to_complexNo:
+            results.append(address_to_complexNo[roadname])
+            count_map["mapped"] += 1
+        else:
+            results.append("FAILED2MAP")
+            count_map["FAILED2MAP"] += 1
+
+    # Step 4: Insert [P19]markerid after [KEY]markerid
+    insert_index = df.columns.get_loc("[KEY]markerid") + 1
+    df.insert(insert_index, "[P19]markerid", results)
+
+    # Step 5: Summary
+    total = len(df)
+    print("✅ Summary:")
+    print(f"  • Mapped:         {count_map['mapped']}")
+    print(f"  • DUPL:edge:      {count_map['DUPL:edge']}")
+    print(f"  • DUPL:markerid3: {count_map['DUPL:markerid3']}")
+    print(f"  • FAILED2MAP:     {count_map['FAILED2MAP']}")
+    print(f"  • Total:          {total}")
+
+    return df
+    
+def preprocess_20(df): # Manual 검색에 필요한 열들을 2,3열로 옮김. 검생의 편리성을 위함. edge case 300개 정도 수동작업 필요.
+    '''
+    find the column "도로명"
+    find the column "[P12]크롤링준비_시구단지명"
+    
+    move both of these columns to the second and third columns respectively. 
+    do not overwrite the original 2 and 3 columns
+    '''
+    
+    """
+    Move '도로명' and '[P12]크롤링준비_시구단지명' columns to the second and third positions,
+    without overwriting existing columns.
+    """
+
+    df = df.copy()
+
+    # Identify columns to move
+    col1 = "도로명"
+    col2 = "[P12]크롤링준비_시구단지명"
+
+    # Remove them temporarily
+    cols_to_move = df[[col1, col2]]
+    df = df.drop([col1, col2], axis=1)
+
+    # Re-insert them at positions 1 and 2
+    df.insert(1, col2, cols_to_move[col2])
+    df.insert(1, col1, cols_to_move[col1])
+
+    return df
+
+def preprocess_21(edge_df, step_df): # 수동검색 이후 edge_manual.csv 을 step_15.csv에 매핑해서 step_16 만들기.
+    """
+    For each row in step_df, if its [P12]크롤링준비_시구단지명 exists in edge_df,
+    update the [KEY]markerid with the value from edge_df.
+    """
+
+    step_df = step_df.copy()
+
+    # Create mapping from edge_manual
+    mapping = dict(zip(
+        edge_df["[P12]크롤링준비_시구단지명"],
+        edge_df["[KEY]markerid"]
+    ))
+
+    # Condition: if value exists in mapping
+    updated_count = 0
+    for idx, row in step_df.iterrows():
+        key = row["[P12]크롤링준비_시구단지명"]
+        if key in mapping:
+            step_df.at[idx, "[KEY]markerid"] = mapping[key]
+            updated_count += 1
+
+    print(f"✅ Updated {updated_count} rows in step_15 using edge_manual.")
+
+    return step_df
+
+def preprocess_22(): # 통계청 자료 첫 열 3개로 나눠서 기입 + csv로 저장 + minor cleanup
+    df = pd.read_excel(ROK_STAT_EXCEL_FILE)
+    store_result(df, 'KOSTAT_0')
+    
+    """
+    Based on indentation in the first column, reconstruct 3-level structure.
+    Output columns: '[P22]시도', '[P22]군구', '[P22]읍면동'
+    """
+    col = df.columns[0]
+    values = df[col].tolist()
+
+    level_1 = None
+    level_2 = None
+    parsed_rows = []
+
+    for i, val in enumerate(values):
+        clean_val = val.strip()
+        indent = len(val) - len(clean_val)
+
+        if indent == 0:
+            level_1 = clean_val
+            level_2 = None
+            level_3 = None
+        elif indent == 3:
+            level_2 = clean_val
+            level_3 = None
+        elif indent == 6:
+            level_3 = clean_val
+        else:
+            print(f"⚠️ Unexpected indent on row {i}: [{val}] → indent={indent}")
+            level_1 = clean_val
+            level_2 = None
+            level_3 = None
+
+        parsed_rows.append([level_1, level_2, level_3])
+
+    # Build final DataFrame
+    parsed_df = pd.DataFrame(parsed_rows, columns=["[P22]시도", "[P22]군구", "[P22]읍면동"])
+    full_df = pd.concat([parsed_df, df.iloc[:, 1:].reset_index(drop=True)], axis=1)
+
+    '''change 광역시--> 시 in the first col'''
+    df = full_df.copy()
+    first_col = df.columns[0]
+    df[first_col] = df[first_col].str.replace("광역시", "시", regex=False)
+    print(f"✅ Replaced '광역시' with '시' in column: {first_col}")
+    
+    '''Delete all rows that don't have level 3 values'''
+    df = df.copy()
+    filtered_df = df[df["[P22]읍면동"].notna()]
+    print(f"✅ Filtered: {len(filtered_df)} rows kept out of {len(df)} total.")
+    return filtered_df
+
+def preprocess_23(df): # markerid_3.csv에 새로운 주소 인덱스 만들기 '[P23]주소'
+    df = df.copy()
+
+    # Create the new address column by concatenating
+    df["[P23]주소"] = df["sido"].astype(str) + " " + df["gungu"].astype(str) + " " + df["[P15]주소"].astype(str)
+
+    # Find where to insert it (after 'complexName')
+    insert_index = df.columns.get_loc("complexName") + 1
+
+    # Reorder columns to insert the new one
+    cols = list(df.columns)
+    cols.insert(insert_index, cols.pop(cols.index("[P23]주소")))
+    df = df[cols]
+
+    print("✅ Added column [P23]주소 after complexName.")
+    return df
+
+def preprocess_24(df, api_key): # markerid_4의 '[P23]주소'를 kakao api로 검색해서 행정동 외 data 받아와서 markerid_5으로 저장
+    """
+    Uses Kakao Geocoding API to extract full address and coordinate info
+    for each row using the '[P23]주소' column in the DataFrame.
+    Appends each extracted value to the DataFrame with prefix '[P24K]'.
+    """
+    df = df.copy()
+    
+    # Columns we want to extract from the API
+    fields_to_extract = [
+        "address_name", "address_type", "x", "y",
+        "address.address_name", "address.region_1depth_name",
+        "address.region_2depth_name", "address.region_3depth_name",
+        "address.region_3depth_h_name", "address.h_code", "address.b_code",
+        "address.mountain_yn", "address.main_address_no", "address.sub_address_no"
+    ]
+
+    # Prepare a container for results
+    result_data = {f"[P24K]{field}": [] for field in fields_to_extract}
+
+    for address in tqdm(df["[P23]주소"]):
+        url = "https://dapi.kakao.com/v2/local/search/address.json"
+        headers = {"Authorization": f"KakaoAK {api_key}"}
+        params = {"query": address}
+
+        try:
+            res = requests.get(url, headers=headers, params=params, timeout=5)
+            data = res.json()
+
+            if "documents" in data and len(data["documents"]) > 0:
+                doc = data["documents"][0]
+                for field in fields_to_extract:
+                    # Handle nested fields like address.x, address.region_1depth_name
+                    keys = field.split(".")
+                    value = doc
+                    for k in keys:
+                        value = value.get(k, None) if isinstance(value, dict) else None
+                    result_data[f"[P24K]{field}"].append(value)
+            else:
+                for field in fields_to_extract:
+                    result_data[f"[P24K]{field}"].append(None)
+
+        except Exception as e:
+            for field in fields_to_extract:
+                result_data[f"[P24K]{field}"].append(None)
+
+    # Convert the result dictionary into a DataFrame and concatenate
+    result_df = pd.DataFrame(result_data)
+    final_df = pd.concat([df.reset_index(drop=True), result_df], axis=1)
+
+    return final_df
+
+def preprocess_25(markerid_df, KOSTAT_df): # markerid_5의 'sido'/'gungu'/'[P24K]address.hname'이 통계청 자료와 일치하면 인구통계 불러와서 markerid_6으로 저장
+    # markerid_df 의 sido, gungu, dong이 KOSTAT_df의 [P22]시도,[P22]군구,[P22]읍면동 이랑 모두 일치하면, 
+    #     KOSTAT_df의 열들 다 가져와서 markerid_df 뒤에다가 추가하기. 
+    #       각 새로 추가한 열의 이름은 기존 KOSTAT_1의 열이름 앞에 [P23]blabla 라고 기입하기 
+    # return df
+    """
+    For each row in markerid_df, match with KOSTAT_df where:
+    markerid_df['sido'], 'gungu', '[P24K]address.region_3depth_h_name' == KOSTAT_df['[P22]시도'], '[P22]군구'], '[P22]읍면동']
+    Then append all KOSTAT_df columns (with renamed prefix) to markerid_df.
+    """
+    df = markerid_df.copy()
+
+    # Define columns to match on
+    merge_cols_markerid = ['sido', 'gungu', '[P24K]address.region_3depth_h_name']
+    merge_cols_kostat = ['[P22]시도', '[P22]군구', '[P22]읍면동']
+
+    # Perform the merge
+    merged_df = df.merge(
+        KOSTAT_df,
+        left_on=merge_cols_markerid,
+        right_on=merge_cols_kostat,
+        how='left'
+    )
+
+    # Identify new columns to rename (exclude the original markerid_df columns)
+    new_cols = [col for col in merged_df.columns if col not in df.columns]
+
+    # Rename the KOSTAT columns with prefix [P23]
+    renamed = {col: f"[P25]{col}" for col in new_cols if col not in merge_cols_kostat}
+    merged_df.rename(columns=renamed, inplace=True)
+
+    return merged_df
+
+def preprocess_26(step_df, markerid_df):
+    """
+    For each row in step_df, find matching row in markerid_df by [KEY]markerid.
+    Append columns from column 12 onward from markerid_df to step_df.
+    Rename the appended columns to start with [P26] instead of [Pxx].
+    """
+    step_df = step_df.copy()
+    markerid_df = markerid_df.copy()
+
+    # Start from column index 12 (i.e., column number 13)
+    info_cols = markerid_df.columns[12:]
+
+    # Subset and rename columns
+    info_subset = markerid_df[["complexNo"] + list(info_cols)].copy()
+    
+    rename_map = {
+    col: re.sub(r"\[P[^\]]+\]", "[P26]", col) if "[" in col else col
+    for col in info_cols
+    }
+    info_subset.rename(columns=rename_map, inplace=True)
+
+    # Force both merge keys to string type
+    step_df["[KEY]markerid"] = step_df["[KEY]markerid"].astype(str)
+    info_subset["complexNo"] = info_subset["complexNo"].astype(str)
+
+    # Merge on [KEY]markerid = complexNo
+    merged = step_df.merge(
+        info_subset,
+        how="left",
+        left_on="[KEY]markerid",
+        right_on="complexNo"
+    )
+
+    # Drop redundant merge key
+    merged.drop(columns=["complexNo"], inplace=True)
+
+    return merged
+
+def preprocess_27(df): # ln가격 계산해서 기입.
+    '''[ROLE] Calculate ln(거래금액(만원)) and insert it after 거래금액(만원)'''
+    df = df.copy()
+
+    # Remove commas and convert to numeric
+    cleaned_prices = df["거래금액(만원)"].str.replace(",", "", regex=False)
+    numeric_prices = pd.to_numeric(cleaned_prices, errors='coerce')
+
+    # Calculate log(price)
+    df["[P27]ln가격"] = np.log(numeric_prices)
+
+    # Insert the new column right after '거래금액(만원)'
+    insert_index = df.columns.get_loc("거래금액(만원)") + 1
+    cols = list(df.columns)
+    log_col = cols.pop(cols.index("[P27]ln가격"))
+    cols.insert(insert_index, log_col)
+    df = df[cols]
+
+    n_missing = df["[P27]ln가격"].isna().sum()
+    print(f"✅ [P27]ln가격 inserted. Missing log values: {n_missing}")
+    return df
+
+def preprocess_28(df): # new.land.naver.com에서 세대수, 동수, 최고층 크롤링해서 기입.
+    """
+    Crawl 세대수, 동수, and 최고층 from new.land.naver.com using unique markerids in df.
+    Supports pause/resume using crawling_progress_temp_save.csv.
+    Automatically retries on network failures.
+    """
+
+    TEMP_SAVE_PATH = "[P28]crawling_progress_temp_save.csv"
+
+    options = Options()
+    # options.add_argument("--headless")  # enable for background crawling
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("user-agent=Mozilla/5.0")
+
+    service = Service("/opt/homebrew/bin/chromedriver")
+    driver = webdriver.Chrome(service=service, options=options)
+
+    wait = WebDriverWait(driver, 3)
+
+    results = []
+
+    # 💡 Clean markerids
+    unique_ids = df["[KEY]markerid"]
+    unique_ids = unique_ids.dropna().astype(str)
+    unique_ids = unique_ids[unique_ids != "UNMAPPED"].unique()
+
+    # ✅ Load previous progress
+    if os.path.exists(TEMP_SAVE_PATH):
+        previous_df = pd.read_csv(TEMP_SAVE_PATH, dtype=str)
+        crawled_ids = set(previous_df["[KEY]markerid"].astype(str))
+        print(f"🔄 Resuming from previous run, skipping {len(crawled_ids)} entries.")
+    else:
+        previous_df = pd.DataFrame()
+        crawled_ids = set()
+
+    for markerid in tqdm(unique_ids):
+        if markerid in crawled_ids:
+            continue
+
+        url = f"https://new.land.naver.com/complexes/{markerid}?ms=35.242394,129.012976,17&a=APT:ABYG:JGC:PRE&e=RETAIL"
+        result = {
+            "[KEY]markerid": markerid,
+            "[P28W]세대수": None,
+            "[P28W]동수": None,
+            "[P28W]최고층": None
+        }
+
+        while True:
+            try:
+                driver.get(url)
+                wait.until(EC.presence_of_element_located((By.TAG_NAME, "dt")))
+                break
+            except WebDriverException:
+                print(f"🌐 Network error for {markerid}, retrying in 15 sec...")
+                time.sleep(15)
+
+        try:
+            soup = BeautifulSoup(driver.page_source, "html.parser")
+            dts = soup.find_all("dt")
+
+            for dt in dts:
+                label = dt.text.strip()
+                if label == "세대수":
+                    dd = dt.find_next_sibling("dd")
+                    result["[P28W]세대수"] = dd.text.strip() if dd else None
+                elif label == "동수":
+                    dd = dt.find_next_sibling("dd")
+                    result["[P28W]동수"] = dd.text.strip() if dd else None
+
+            # ✅ Click the 단지정보 button
+            try:
+                btn = wait.until(EC.presence_of_element_located((By.XPATH, '//button[contains(text(), "단지정보")]')))
+                driver.execute_script("arguments[0].scrollIntoView({behavior: 'instant', block: 'center'});", btn)
+                time.sleep(0.5)
+
+                if btn.is_displayed() and btn.is_enabled():
+                    btn.click()
+                else:
+                    driver.execute_script("arguments[0].click();", btn)
+
+                time.sleep(1)
+
+                # Parse new HTML after button click
+                soup = BeautifulSoup(driver.page_source, "html.parser")
+                ths = soup.find_all("th", class_="table_th")
+
+                for th in ths:
+                    if th.text.strip() == "저/최고층":
+                        td = th.find_next_sibling("td")
+                        if td:
+                            result["[P28W]최고층"] = td.text.strip()
+                        break
+
+            except Exception as e:
+                print(f"⚠️ Button click or 최고층 extraction failed for {markerid}: {e}")
+
+            print(f"✅ {markerid}: 세대수={result['[P28W]세대수']}, 동수={result['[P28W]동수']}, 최고층={result['[P28W]최고층']}")
+            results.append(result)
+
+            # Save to temp file immediately
+            pd.DataFrame([result]).to_csv(TEMP_SAVE_PATH, mode="a", header=not os.path.exists(TEMP_SAVE_PATH), index=False)
+
+        except Exception as e:
+            print(f"⚠️ Skipped {markerid}: {e}")
+            continue
+
+    driver.quit()
+
+    # ✅ Combine with previously saved results
+    full_df = pd.read_csv(TEMP_SAVE_PATH, dtype=str)
+    result_df = pd.DataFrame(full_df)
+    merged_df = df.merge(result_df, on="[KEY]markerid", how="left")
+
+    # ✅ Delete temp file
+    os.remove(TEMP_SAVE_PATH)
+    print("🗑️ Deleted temp file. Returning final merged dataframe.")
+
+    return merged_df
+
+def preprocess_29(df): # 통계 인구 비율 계산해서 기입. 결과: [P29]under_15ratio, [P29]over_65ratio
+    total = df["[P26]총인구(명)_합계"]
+    under15 = df["[P26]총인구(명)_15세미만"]
+    over65 = df["[P26]총인구(명)_65세이상"]
+
+    df["[P29]under_15ratio"] = under15 / total
+    df["[P29]over_65ratio"] = over65 / total
+
+    print("✅ [P29] 인구 비율 계산 완료.")
+    return df
+
+def preprocess_30(df):  # 가구당 주차 결과: [P30]가구당주차
+
+    # Step 1: Convert values to strings
+    households_raw = df["[P28W]세대수"].astype(str).str.replace(",", "").str.extract("(\d+)", expand=False)
+    parking_raw = df["[P26]주차"].astype(str).str.replace(",", "").str.extract("(\d+)", expand=False)
+
+    # Step 2: Convert to numeric (NaNs will be handled automatically)
+    households = pd.to_numeric(households_raw, errors="coerce")
+    parking_spaces = pd.to_numeric(parking_raw, errors="coerce")
+
+    # Step 3: Compute ratio
+    df["[P30]가구당주차"] = parking_spaces / households
+
+    print("✅ [P30] 가구당 주차 계산 완료.")
+    return df
+
+def preprocess_31(df): # 열 '[P28W]최고층' 현재모습: "24/25층" --> "25"으로 바꾸기
+    # keep everything after the slash and convert to int
+    """
+    Create a new column '[P31]최고층_int' by extracting the highest floor as an integer
+    from '[P28W]최고층', which looks like '24/25층'.
+    """
+    def extract_highest(value):
+        if isinstance(value, str) and "/" in value:
+            try:
+                return int(value.split("/")[-1].replace("층", "").strip())
+            except ValueError:
+                return None
+        return None
+
+    df["[P31]최고층"] = df["[P28W]최고층"].apply(extract_highest)
+    print("✅ [P31]최고층 생성 완료.")
+    return df
+
+def preprocess_32(df): # spring, fall, winter column + 계약년 col 만들기.
+    """
+    Adds 3 columns: [P32]spring, [P32]fall, [P32]winter
+    based on the '계약년월' column, which is expected to be in the format YYYYMM.
+    """
+    df = df.copy()
+
+    # Initialize all season columns to 0
+    df["[P32]spring"] = 0
+    df["[P32]fall"] = 0
+    df["[P32]winter"] = 0
+
+    # Extract month part (last two digits of 계약년월)
+    df["계약월"] = df["계약년월"].astype(str).str[-2:].astype(int)
+    # Extract year part (first four digits of 계약년월)
+    df["[P32]계약년"] = df["계약년월"].astype(str).str[:4].astype(int)
+    
+    # Assign 1 to the correct seasonal column
+    df.loc[df["계약월"].isin([3, 4, 5]), "[P32]spring"] = 1
+    df.loc[df["계약월"].isin([9, 10, 11]), "[P32]fall"] = 1
+    df.loc[df["계약월"].isin([12, 1, 2]), "[P32]winter"] = 1
+
+    # Drop the helper column
+    df.drop(columns=["계약월"], inplace=True)
+    #keep year column
+    print("✅ [P32]spring/fall/winter columns created.")
+    print("✅ [P32]계약년 column created.")
+    return df
+
+def preprocess_33(old_df: pd.DataFrame, new_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Enrich transaction-level old_df with apartment/district-level info from new_df
+    using '[P2]시군구_단지명' as the key. Only columns that do not already exist in old_df
+    are added. Existing transaction-specific columns are preserved.
+
+    Parameters:
+        old_df (pd.DataFrame): Full transaction-level DataFrame (~70,000 rows)
+        new_df (pd.DataFrame): Unique apartment-level DataFrame (~5,000 rows)
+
+    Returns:
+        pd.DataFrame: Enriched DataFrame with same row count as old_df
+    """
+    key = '[P2]시군구_단지명'
+
+    # ✅ Check key exists
+    if key not in old_df.columns or key not in new_df.columns:
+        raise KeyError(f"❌ Merge key '{key}' must exist in both DataFrames.")
+
+    # ✅ Ensure uniqueness of key in new_df
+    if not new_df[key].is_unique:
+        raise ValueError(f"❌ Column '{key}' must be unique in new_df.")
+
+    # ✅ Determine new columns to add (exclude key + anything already in old_df)
+    cols_to_add = [col for col in new_df.columns if col != key and col not in old_df.columns]
+
+    if not cols_to_add:
+        print("ℹ️ No new columns to add from new_df. Returning original DataFrame.")
+        return old_df.copy()
+
+    # ✅ Prepare the subset of new_df for merging
+    enrichment_df = new_df[[key] + cols_to_add]
+
+    # ✅ Perform the merge (left join keeps 70,000 rows)
+    enriched_df = old_df.merge(enrichment_df, on=key, how='left')
+    
+    # ✅ Move '[KEY]markerid' to the front if it exists
+    if '[KEY]markerid' in enriched_df.columns:
+        cols = ['[KEY]markerid'] + [col for col in enriched_df.columns if col != '[KEY]markerid']
+        enriched_df = enriched_df[cols]
+    
+    return enriched_df
+
+def clean_cols(df: pd.DataFrame, column_mapping: dict) -> pd.DataFrame:
+    """
+    Returns a new DataFrame with columns renamed and ordered based on the given mapping.
+    Missing columns will raise an error.
+    
+    Parameters:
+        df (pd.DataFrame): The original DataFrame
+        column_mapping (dict): Mapping of final column names to existing column names (or None for empty)
+
+    Returns:
+        pd.DataFrame: A new DataFrame with renamed, reordered, and padded columns.
+    """
+    final_df = pd.DataFrame()
+
+    for final_col, source_col in column_mapping.items():
+        if source_col is None:
+            final_df[final_col] = ""  # Empty placeholder
+        else:
+            if source_col not in df.columns:
+                raise KeyError(f"❌ Column '{source_col}' not found in DataFrame. Please check config or df.columns.")
+            final_df[final_col] = df[source_col]
+
+    return final_df
+
+
+
+
+
+
+
