@@ -29,7 +29,7 @@ pd.set_option('display.unicode.east_asian_width', True)  # better for Korean spa
 
 from config import EXCEL_FILES, COMBINED_EXCEL_OUTPUT, COMBINED_CSV_OUTPUT, ROK_STAT_EXCEL_FILE
 from config import TARGET_SIDO_CODES, BASE_GUNGU_URL, BASE_DONG_URL, BASE_APT_URL, BASE_HEADERS, BASE_SIDO_URL
-from config import FINAL_COLUMN_MAPPING
+from config import HEATING_TYPES, FINAL_COLUMN_MAPPING
 
 '''[NAVER] 네이버 부동산에서 모든 markerid 가져오기'''
 def get_sido_info():
@@ -1516,6 +1516,19 @@ def preprocess_33(old_df: pd.DataFrame, new_df: pd.DataFrame) -> pd.DataFrame:
         enriched_df = enriched_df[cols]
     
     return enriched_df
+
+def preprocess_34(df):
+
+    df['[P34]난방'] = df['[P26]난방'].map(HEATING_TYPES).astype("Int64")
+
+    col_order = list(df.columns)
+    if '[P26]난방' in col_order:
+        p26_index = col_order.index('[P26]난방')
+        col_order.remove('[P34]난방')
+        col_order.insert(p26_index + 1, '[P34]난방')
+        df = df[col_order]
+
+    return df
 
 def clean_cols(df: pd.DataFrame, column_mapping: dict) -> pd.DataFrame:
     """
