@@ -102,6 +102,14 @@ BASE_HEADERS = {
 
 KAKAO_API_KEY = ______insert________
 
+'''Heating Types mapping'''
+# Dummy variable: city gas 0 and others 1.
+HEATING_TYPES = {
+    'HF007': 1, #개별난방/LPG
+    'HF001': 0, #개별난방 / 도시가스
+    'HF002': 1 #지역난방 / 열병합
+    }
+
 
 FINAL_COLUMN_MAPPING = {
     '[KEY]markerid': '[KEY]markerid',
@@ -116,7 +124,7 @@ FINAL_COLUMN_MAPPING = {
     '세대수': '[P28W]세대수',
     '총동수': '[P28W]동수',
     '가구당주차':'[P30]가구당주차',
-    '난방연료' : None,
+    '난방연료' : '[P34]난방',
     '서울대입학자수': None,
     '고등학교수': None,
     'CBD 녹지거리': None,
