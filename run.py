@@ -26,7 +26,7 @@ from functions import get_sido_info, get_gungu_info, get_dong_info, get_apt_list
 from functions import combine_excel
 from functions import load_step, load_csv, store_result, count_unmapped
 from functions import unique_df, mapping, update_key, update_key_new
-from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16, preprocess_17, preprocess_18, preprocess_19, preprocess_20, preprocess_21, preprocess_22, preprocess_23, preprocess_24, preprocess_25, preprocess_26, preprocess_27, preprocess_28, preprocess_29, preprocess_30, preprocess_31, preprocess_32, preprocess_33
+from functions import preprocess_1, preprocess_2, preprocess_3, preprocess_4, preprocess_5, preprocess_6, preprocess_7, preprocess_8, preprocess_9, preprocess_10, preprocess_11, preprocess_12, preprocess_13, preprocess_14, preprocess_15, preprocess_16, preprocess_17, preprocess_18, preprocess_19, preprocess_20, preprocess_21, preprocess_22, preprocess_23, preprocess_24, preprocess_25, preprocess_26, preprocess_27, preprocess_28, preprocess_29, preprocess_30, preprocess_31, preprocess_32, preprocess_33, preprocess_34
 from functions import classify_search_result, multiple_id_search
 from functions import clean_cols
 
@@ -238,8 +238,13 @@ if __name__ == "__main__":
     res = preprocess_33(old_df, new_df)
     store_result(res, 'step_24')
     
-    '''Final Clean'''
+    '''Preprocessing 34'''
     df = load_step(24)
+    res = preprocess_34(df)
+    store_result(res, 'step_25')
+    
+    '''Final Clean'''
+    df = load_step(25)
     res = clean_cols(df, FINAL_COLUMN_MAPPING)
     store_result(res, '**Final_Result')
     print(f"⭐️Final Result Saved!! Yay!⭐️")
